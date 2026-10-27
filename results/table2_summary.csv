@@ -1,0 +1,8 @@
+method,operating_point,auroc,auprc,alerts_per_100,sensitivity,cases_per_100_alerts,reviews_per_case
+logistic,top 5%,0.919 (0.912 to 0.926),0.338 (0.314 to 0.367),4.9,55.8% (53.2% to 58.5%),27.6,3.6
+random_forest,top 5%,0.917 (0.910 to 0.924),0.332 (0.306 to 0.360),5.0,54.1% (51.4% to 56.7%),26.6,3.8
+xgboost,top 5%,0.925 (0.919 to 0.932),0.360 (0.335 to 0.388),4.9,56.0% (53.3% to 58.6%),28.0,3.6
+SIRS (triage),rule alert,0.709 (0.695 to 0.721),0.065 (0.059 to 0.073),5.3,26.7% (24.4% to 29.0%),12.2,8.2
+qSOFA (triage),rule alert,0.667 (0.655 to 0.680),0.076 (0.067 to 0.086),0.7,9.0% (7.5% to 10.5%),30.3,3.3
+Modified NEWS (triage),rule alert,0.807 (0.795 to 0.819),0.148 (0.130 to 0.165),2.9,26.5% (24.1% to 28.6%),22.4,4.5
+Triage acuity,rule alert,0.710 (0.697 to 0.722),0.057 (0.052 to 0.063),37.7,71.6% (69.2% to 73.8%),4.6,21.6

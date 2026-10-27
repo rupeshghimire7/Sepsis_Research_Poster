@@ -1,0 +1,16 @@
+rank,feature,label,mean_abs_shap,direction
+1,age,Age,0.6234594,higher value → higher risk
+2,shock_index,Shock index,0.37826318,higher value → higher risk
+3,arrive_walk_in,Arrival: walk in,0.28324023,higher value → lower risk
+4,n_abnormal_vitals,Number of abnormal vitals,0.2772459,higher value → higher risk
+5,temperature,Temperature,0.26417777,higher value → higher risk
+6,heartrate,Heart rate,0.17054357,higher value → higher risk
+7,cc_other,Complaint: other,0.16336249,higher value → lower risk
+8,cc_fever,Complaint: fever,0.1535117,higher value → higher risk
+9,prior_sepsis_admission,Previous sepsis admission,0.15085818,higher value → higher risk
+10,o2sat,Oxygen saturation,0.15059747,higher value → lower risk
+11,map,Mean arterial pressure,0.14012109,higher value → lower risk
+12,cc_injury,Complaint: injury,0.12633833,higher value → lower risk
+13,ed_visits_365d,"ED visits, past year",0.1153854,higher value → lower risk
+14,cc_transfer,Complaint: transfer,0.11222344,higher value → higher risk
+15,male,Male sex,0.10156674,higher value → higher risk

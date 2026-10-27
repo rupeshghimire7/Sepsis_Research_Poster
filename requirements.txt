@@ -1,0 +1,11 @@
+# Same pins as environment.yml (the conda env is the reference); for pip-only setups.
+numpy==2.5.3
+pandas==3.0.6
+pyarrow==24.0.0
+scipy==1.18.1
+scikit-learn==1.9.1
+xgboost==3.4.1
+shap==0.51.0
+matplotlib==3.11.2
+PyYAML==6.0.3
+pytest==9.1.1

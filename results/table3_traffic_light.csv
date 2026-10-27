@@ -1,0 +1,4 @@
+tier,arrivals,share_of_arrivals,cases,sepsis_rate,share_of_cases,mean_predicted_risk
+low,49452,0.8016,186,0.0038,0.1233,0.0045
+moderate,9224,0.1495,478,0.0518,0.317,0.0489
+high,3014,0.0489,844,0.28,0.5597,0.2821

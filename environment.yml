@@ -1,0 +1,19 @@
+# conda env create -f environment.yml && conda activate sepsis-poster
+# All packages from the defaults channel: mixing in conda-forge breaks pyarrow's native libraries.
+name: sepsis-poster
+channels:
+  - defaults
+dependencies:
+  - python=3.14
+  - numpy=2.5.3
+  - pandas=3.0.6
+  - pyarrow=24.0.0
+  - scipy=1.18.1
+  - scikit-learn=1.9.1
+  - xgboost=3.4.1
+  - shap=0.51.0
+  - matplotlib=3.11.2
+  - seaborn
+  - pyyaml=6.0.3
+  - pytest=9.1.1
+  - ipykernel

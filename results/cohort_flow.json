@@ -1,0 +1,43 @@
+{
+  "flow": [
+    {
+      "step": "ED stays",
+      "stays": 425087,
+      "patients": 205504,
+      "removed": 0
+    },
+    {
+      "step": "with a triage record",
+      "stays": 425087,
+      "patients": 205504,
+      "removed": 0
+    },
+    {
+      "step": "with a patient record (age known)",
+      "stays": 425011,
+      "patients": 205465,
+      "removed": 76
+    },
+    {
+      "step": "aged 18 or over",
+      "stays": 425011,
+      "patients": 205465,
+      "removed": 0
+    },
+    {
+      "step": "at least one triage vital recorded",
+      "stays": 409216,
+      "patients": 196624,
+      "removed": 15795
+    }
+  ],
+  "outcomes": {
+    "sepsis_icd": 10092,
+    "critical": 19154
+  },
+  "splits": {
+    "test": 29494,
+    "train": 137636,
+    "valid": 29494
+  }
+}

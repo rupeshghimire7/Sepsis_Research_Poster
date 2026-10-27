@@ -1,0 +1,174 @@
+# Every analysis choice in one place.
+
+paths:
+  mimic_dir: data_real/mimic-iv   # contains hosp/ and icu/
+  ed_dir: data_real/mimic-iv-ed   # contains ed/
+  out_dir: out                    # everything the pipeline writes (git-ignored)
+  results_dir: results            # aggregate results copied here for the public repository
+
+seed: 42
+
+cohort:
+  min_age: 18
+  # A stay is dropped only when none of these six is recorded (after cleaning).
+  vitals: [temperature, heartrate, resprate, o2sat, sbp, dbp]
+
+cleaning:
+  temperature:
+    celsius_range: [30, 45]       # values here are already Celsius (entered by mistake)
+    fahrenheit_range: [86, 113]   # values here are converted F -> C; anything else -> missing
+  # Plausible ranges after unit conversion (temperature in °C). Outside -> missing; the stay is kept.
+  # Starting choice from the protocol; confirm with a clinician, then freeze.
+  ranges:
+    temperature: [32, 43]
+    heartrate: [20, 250]
+    resprate: [4, 60]
+    o2sat: [50, 100]
+    sbp: [50, 300]
+    dbp: [20, 200]
+  pain_range: [0, 10]
+  acuity_range: [1, 5]
+
+outcomes:
+  primary: sepsis_icd
+  secondary: critical
+  # Primary: any sepsis code on the ED stay (ed/diagnosis) or its linked admission (hosp/diagnoses_icd).
+  # Prefix match after removing dots.
+  sepsis_icd:
+    icd10: [A40, A41, R6520, R6521]
+    icd9: ["038", "99591", "99592", "78552"]
+  # Secondary: in-hospital death, death in the ED, or ICU admission within `icu_within_hours` of ED arrival.
+  critical:
+    icu_within_hours: 12
+  # Not used yet: a later check with a clinical sepsis definition (sepsis_ed/sepsis3.py, --sepsis3).
+  # Needs the large chartevents and labevents tables.
+  sepsis3:
+    enabled: false
+    horizon_hours: 48
+
+# Chief complaint -> yes/no groups. Lower-cased text, regex search. A stay matching no group gets cc_other = 1.
+complaint_groups:
+  cc_fever: '\bfever|febrile|chills|rigors|\bfeb\b'
+  cc_sob: '\bsob\b|short(?:ness)? of breath|dyspn|resp(?:iratory)? distress|hypoxi|\bdoe\b'
+  cc_cough: 'cough|congestion|\buri\b|pneumonia|\bflu\b|influenza'
+  cc_abdominal_pain: '\babd|abdom|epigastric|\bruq\b|\bllq\b|\brlq\b|\bluq\b|flank'
+  cc_vomit_diarrhoea: '\bn/?v\b|vomit|nausea|diarrh|emesis|\bn/v/d\b'
+  cc_urinary: '\buti\b|dysuria|urinary|hematuria|urine|foley|retention'
+  cc_confusion: '\bams\b|altered|confus|mental status|letharg|unresponsive|delirium|\bms change'
+  cc_weakness: 'weak|fatigue|malaise|failure to thrive|\bftt\b|lethargy'
+  cc_dizzy_collapse: 'dizz|syncope|presyncope|lightheaded|collapse|unsteady|vertigo'
+  cc_chest_pain: 'chest pain|\bcp\b|chest pressure|chest tightness'
+  cc_skin_infection: 'cellulitis|wound|abscess|ulcer|infect|redness|\brash\b|i ?& ?d'
+  cc_injury: 'fall|\bs/p\b|mvc|\bmva\b|lac(?:eration)?\b|fracture|\bfx\b|injur|trauma|assault|head strike|\bhit\b'
+  cc_headache: 'headache|\bha\b|migraine'
+  cc_hypotension: 'hypotens|low bp|low blood pressure'
+  cc_transfer: 'transfer|abnormal lab|abn lab|\bsent\b'
+
+# Clinical flags (°C, mmHg, %), mirror cut-offs clinicians use.
+flags:
+  fever_c: 38.0
+  low_temp_c: 36.0
+  hr_high: 90
+  rr_high: 20
+  rr_qsofa: 22
+  sbp_low: 100
+  spo2_low: 92
+  night_hours: [22, 7]            # arrival at or after 22:00 or before 07:00
+
+history:
+  lookback_days: 365
+  # Long-term conditions coded at discharges strictly before this arrival (any time back).
+  # Each entry: ICD prefix, or "LO-HI" range compared on the first len(LO) characters.
+  comorbidities:
+    diabetes:      {icd10: [E08-E13], icd9: ["250"]}
+    kidney:        {icd10: [N18, N19, Z992], icd9: ["585", "586", V4511]}
+    chronic_lung:  {icd10: [J40-J47, J84], icd9: ["490-496"]}
+    heart_failure: {icd10: [I50, I110, I130, I132], icd9: ["428"]}
+    cancer:        {icd10: [C00-C97], icd9: ["140-208"]}
+    liver:         {icd10: [K70, K72, K73, K74, K766], icd9: ["571", "5722", "5723", "5724"]}
+    dementia:      {icd10: [F01, F02, F03, G30], icd9: ["290", "2941", "3310"]}
+
+split:
+  train: 0.70
+  valid: 0.15
+  test: 0.15
+
+checks:
+  # Columns that must never reach a feature matrix. Outcome columns are added automatically.
+  forbidden_columns: [subject_id, stay_id, hadm_id, intime, outtime, disposition, ed_los_hours,
+                      race, anchor_year_group, chiefcomplaint, admitted]
+  forbidden_prefixes: [vitalsign_, pyxis_, lab_, dx_]
+  # Model stage runs only if every split has at least this many primary-outcome cases.
+  min_cases_per_split: 30
+  # Each split's prevalence must be within this relative distance of the overall prevalence.
+  max_relative_prevalence_gap: 0.20
+
+# ---------------------------------------------------------------- models and evaluation
+modelling:
+  feature_set: B                  # primary model inputs
+  compare_feature_sets: [A, B, C] # XGBoost refit on each, for table_feature_sets.csv
+  secondary_outcome: true         # also fit XGBoost (set B) for the critical-deterioration outcome
+  cv_folds: 5                     # grouped by patient, inside the training split
+  n_jobs: -1
+  # Random search, scored on AUPRC. No class weights, oversampling or SMOTE.
+  logistic:
+    n_iter: 25
+    C: [0.0001, 10]               # log-uniform
+  random_forest:
+    n_iter: 8
+    n_estimators: [300, 500]
+    min_samples_leaf: [10, 20, 50, 100]  # very small leaves on ~300k stays take > 10 min per fit on a laptop
+    max_features: [sqrt, 0.3]
+    max_samples: [0.2, 0.3]       # rows per tree
+    tune_max_stays: 60000         # tune on a patient sample of the training split; refit on all of it
+  xgboost:
+    n_iter: 25
+    max_depth: [3, 6]
+    learning_rate: [0.03, 0.1]
+    subsample: [0.6, 1.0]
+    colsample_bytree: [0.5, 1.0]
+    min_child_weight: [1, 5, 10]
+    max_rounds: 3000
+    early_stopping_rounds: 50     # on the held-out fold during tuning, on validation for the final fit
+
+traffic_light:
+  high_top_fraction: 0.05         # top 5% of arrivals by model score -> high
+  moderate_next_fraction: 0.15    # next 15% -> moderate; rest low
+  reference_sensitivity: 0.86     # SAFE-WAIT preprint operating point (context only)
+
+baselines:
+  news_alert_min: 5               # modified NEWS >= 5 alerts
+  acuity_alert_max: 2             # ESI 1-2 alerts
+
+evaluation:
+  n_bootstrap: 1000               # patient-level resamples of the test set
+  decision_thresholds: [0.01, 0.20]
+  calibration_bins: 10
+  min_cell: 10                    # suppress any reported count below this
+
+fairness:
+  age_bands: [18, 45, 65, 80]     # 18-44, 45-64, 65-79, 80+
+  race_groups:                    # MIMIC race string prefix -> group; anything else -> Other/unknown
+    WHITE: White
+    BLACK: Black
+    HISPANIC: Hispanic/Latino
+    ASIAN: Asian
+
+audit:                            # python run.py --audit  (train + validation only; does not open test)
+  # Chief complaints that may already name the diagnosis. Known at triage, but they make the task easier.
+  complaint_flags:
+    sepsis: 'seps|septic'
+    bacteremia: 'bacter'
+    blood_culture: 'blood cult|\bbcx\b|pos(?:itive)? cult'
+    lactate: 'lactate|lactic'
+    abnormal_lab: 'abn(?:ormal)? lab'
+    pneumonia: 'pneumonia|\bpna\b'
+    uti: '\buti\b'
+    neutropenia: 'neutropen'
+  exclude_for_sensitivity: [sepsis, bacteremia, blood_culture]  # stays dropped in audit_without_flagged.csv
+  n_bootstrap: 200
+
+explain:
+  top_n: 15
+  dependence: [age, heartrate, temperature, resprate]
+  permutation_rows: 20000         # subsample for permutation importance

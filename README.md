@@ -1,107 +1,143 @@
-# ED sepsis risk from triage — MIMIC-IV-ED + MIMIC-IV
+# Explainable Sepsis Risk at ED Triage
 
-Predict, **at ED triage**, whether a patient will meet Sepsis-3 criteria within
-`--horizon` hours (default 48h) of arrival. Labels come from MIMIC-IV
-(hosp + icu); features come only from MIMIC-IV-ED triage + demographics.
+Can the information a triage nurse records in the first few minutes flag patients at risk of sepsis
+better than the screening rules used today, and explain each flag?
 
-## Layout expected
+We trained models on 409,216 adult emergency department visits from MIMIC-IV-ED, using only
+triage-time information: vital signs, age, sex, the presenting complaint, how the patient arrived, and
+past visits. No blood tests. The models were then tested once on patients they had never seen.
 
-```
-data/
-  mimic-iv-clinical-database-demo-2.2/   # --mimic-dir
-    hosp/  patients admissions prescriptions microbiologyevents labevents diagnoses_icd
-    icu/   chartevents inputevents         (optional but improves SOFA)
-  mimic-iv-ed-demo-2.2/                  # --ed-dir
-    ed/    edstays triage vitalsign pyxis diagnosis
-```
-`.csv.gz` or `.csv` both work. The same code runs on the full credentialed
-release; labevents/chartevents are read in chunks and filtered by itemid.
+> **Research prototype, not for clinical use.**
+
+## Results (test set: 61,690 visits, 1,508 with sepsis)
+
+| | Sepsis cases found per 100 | Share of arrivals flagged |
+|---|---|---|
+| SIRS ≥ 2 (triage) | 27 | 5.3% |
+| **Model, same number of alerts** | **58** (+32, 95% CI 29 to 35) | 5.3% |
+
+- **Ranking:** AUROC 0.925 (0.919 to 0.932) and AUPRC 0.360. The best rule, NEWS, reached AUROC 0.81.
+- **Equal workload:** the model found more cases than every rule: SIRS, qSOFA, NEWS and the nurse's
+  acuity score.
+- **Traffic light:**
+  - The red tier is 5% of arrivals and holds 56% of sepsis cases (about 1 in 3.6 flagged patients has sepsis).
+  - Red and amber together flag 20% of arrivals and catch 88% of cases.
+- **Honest risks:** the predicted risk matched the observed rate in every tier (calibration slope 1.02).
+- **Drivers:** age, shock index, arrival mode (walking in lowers risk), the number of abnormal vital signs,
+  temperature, a fever complaint and a previous sepsis admission.
+- **Fairness:** ranking was similar across sex, race and time period. It was weaker for patients aged
+  65 and over (AUROC 0.89–0.90). Septic young adults were less often flagged high-risk.
+
+All tables and figures are in [`results/`](results). The full findings are in
+[`results/findings.md`](results/findings.md).
+
+![Cases found at the same number of alerts](results/fig_rules_matched.png)
+
+## How it works
+
+1. **Cohort.** One row per adult ED visit with at least one triage vital sign.
+2. **Outcome.** A sepsis diagnosis code on the visit or on the admission that followed. A secondary
+   outcome is death or ICU admission within 12 hours.
+3. **Features.** Only what is known at triage. Records from before this visit are used; nothing after it.
+4. **Split by patient.** 70% training, 15% validation, 15% test, so no patient appears in more than one split.
+5. **Models.**
+   - Logistic regression, random forest and XGBoost, tuned with cross-validation on the training split.
+   - Risks are calibrated on validation.
+6. **Test once.** The test split is scored a single time. A lock file then blocks retraining.
+7. **Explain and audit.** SHAP explanations, checked two other ways; performance by patient group.
+
+Every analysis choice is in [`config.yaml`](config.yaml). The study protocol is in `Docs/Documents/`.
+
+## Run it
 
 ```bash
-pip install pandas scikit-learn
-python run.py --mimic-dir data/mimic-iv-clinical-database-demo-2.2 \
-              --ed-dir   data/mimic-iv-ed-demo-2.2 --out out
+conda env create -f environment.yml && conda activate sepsis-poster   # or: pip install -r requirements.txt
+pytest tests/
 ```
-Outputs in `out/`: `labels.csv`, `dataset.csv`, `metrics_<target>.csv`,
-`oof_predictions_<target>.csv`.
 
-Smoke test without real data: `python tests/make_synthetic.py syn && python run.py --mimic-dir syn/mimic --ed-dir syn/ed`
+**Without credentialed data.** Generate a synthetic dataset and run the whole pipeline. The numbers
+it produces mean nothing clinically.
 
-## Label: Sepsis-3 onset (`sepsis3`)
+```bash
+python tests/make_synthetic.py syn 20000
+python run.py --mimic-dir syn/mimic --ed-dir syn/ed --out syn_out
+python run.py --out syn_out --open-test
+python app/traffic_light.py --bundle syn_out/models/bundle.joblib      # http://localhost:8050
+```
 
-Linkage is by `subject_id` + time, not only `hadm_id`, because ED cultures and
-ED Pyxis antibiotics often have no `hadm_id`. MIMIC date-shifting is
-consistent per patient across modules, so times are comparable.
+**With MIMIC data.** You need your own PhysioNet credential.
 
-1. **Suspected infection time (t_si)** — systemic antibiotic (hosp
-   `prescriptions` + ED `pyxis`, matched by GSN code *or* drug name) paired with
-   any culture (`microbiologyevents` + ICU culture orders in `chartevents`):
-   culture ≤72h before antibiotic → t_si = culture time; culture ≤24h after
-   antibiotic → t_si = antibiotic time.
-2. **SOFA** — worst value per component in [t_si − 48h, t_si + 24h], summed,
-   baseline assumed 0:
-   coag (platelets 51265), liver (bilirubin 50885), renal (creatinine 50912),
-   respiratory (PaO2 50821 ÷ FiO2 50816/223835 within 4h), cardiovascular
-   (MAP from ED vitals + 220052/220181/225312; vasopressors from inputevents as
-   norepinephrine-equivalent dose),
-   CNS (GCS 220739+223900+223901).
-3. **Onset** = earliest t_si with SOFA ≥ 2; stay is positive if onset ∈
-   [ED intime, intime + horizon].
+1. Download seven tables into `data_real/`:
+   - `mimic-iv-ed/ed/`: `edstays`, `triage`, `diagnosis`
+   - `mimic-iv/hosp/`: `patients`, `admissions`, `diagnoses_icd`
+   - `mimic-iv/icu/`: `icustays`
+2. Run:
 
-Secondary label `sepsis_icd`: A40*, A41*, R65.2* (ICD-10) or 038*, 995.91/92,
-785.52 (ICD-9) on the ED stay or linked admission — useful as a sensitivity
-check, known to under-count sepsis relative to Sepsis-3.
+```bash
+python run.py               # step 1: data, training and calibration (about 25 min on a laptop)
+python run.py --audit       # optional: leakage checks on validation
+python run.py --open-test   # step 2, once: test-set results, written to out/ and results/
+python app/traffic_light.py # prototype using the trained model
+```
 
-### Known simplifications
-- Window-worst SOFA, not hourly rolling SOFA; baseline SOFA assumed 0 (chronic
-  organ dysfunction, e.g. CKD, will create false positives).
-- No urine output in renal; respiratory 3–4 not gated on ventilation.
-- Cardiovascular: any vasopressor → 3, NE-equivalent > 0.1 mcg/kg/min → 4
-  (Goradia 2021 factors), rather than per-drug SOFA dose bands.
-- GCS only exists for ICU stays; ED has none.
-- ED stays not admitted have little downstream data → effectively labelled 0.
-  Consider restricting to admitted stays as a sensitivity analysis.
-- Triage BP also feeds the label's cardiovascular score — intended (sepsis
-  present on arrival is still a case to flag), but note it when reporting.
+## Repository
 
-## Borrowed from MIMIC-Sepsis (Huang et al., BHI 2025, MIT licence)
-github.com/yongh7/MIMIC-sepsis is an ICU-anchored benchmark: it keeps only ICU
-stays that already meet Sepsis-3 and predicts outcomes (mortality, LOS, septic
-shock, vasopressor need). It has no non-septic patients and no ED stays, so it
-cannot supply our ED-level 1/0 label directly. Reused pieces:
-- 126 First DataBank GSN antibiotic codes (originally AI_Clinician).
-- 27 ICU culture-order itemids from `chartevents`.
-- Vasopressor unit handling for NE-equivalents (factors swapped for the
-  Goradia 2021 consensus; the repo's phenylephrine ×0.45 and vasopressin ×5
-  overstate dose).
-Not reused: its onset loop (iterates antibiotics in file order, not time
-order, so "first" onset isn't guaranteed earliest), its SOFA CV score (returns
-2 when MAP < 65 before checking pressors, and scores missing components as 0
-silently), and the PostgreSQL requirement. Its `init_preprocess.py` also
-imports a `utils` module that isn't in the repo.
+```
+run.py              runs the pipeline
+config.yaml         every analysis choice
+sepsis_ed/          cohort, outcomes, features, models, evaluation, figures
+app/                traffic-light prototype (offline web page)
+tests/              unit tests and the synthetic data generator
+results/            aggregate results from the real data (no patient-level data)
+```
 
-Natural second stage: for ED patients we flag who go on to ICU sepsis, its
-4-hour trajectory format and septic-shock / vasopressor tasks fit as a
-downstream deterioration model.
+## Data and privacy
 
-## Features (triage-time only, no leakage)
-Age, sex, temp, HR, RR, SpO2, SBP, DBP, pain, ESI acuity, MAP, shock index,
-partial SIRS and partial qSOFA (no mental status at triage), chief-complaint
-keyword flags, arrival mode, count of prior admissions before this arrival.
+- Patient-level data never leaves the analysis laptop. It is never committed and never sent to online tools.
+- The repository holds code and aggregate results only. Any count below 10 is shown as `<10`.
+- The prototype's example patients are invented.
 
-## Model
-Logistic regression (median impute + missingness indicators, scaled, balanced)
-and histogram GBM, evaluated with `StratifiedGroupKFold` grouped by
-`subject_id` (a patient never appears in train and test). Reports AUROC,
-AUPRC, Brier, prevalence.
+## Limitations
 
-## Demo-data caveat
-The demo has 100 patients and only a few hundred ED stays, so expect a
-handful of Sepsis-3 positives. Treat demo metrics as a pipeline check only;
-the code prints a warning when positives < 30.
+- One US hospital, analysed retrospectively.
+- Sepsis was defined by diagnosis codes. These under-count sepsis and give no onset time.
+- The complaint keyword groups have not yet been reviewed by a clinician.
 
-## Next steps once full access lands
-- Temporal (by anchor_year_group) hold-out instead of random CV.
-- Calibration plots and decision-curve analysis.
-- Compare against qSOFA / NEWS2 computed at triage as clinical baselines.
-- Free-text chief complaint embeddings instead of keyword flags.
+## Future work
+
+- A clinical sepsis definition (Sepsis-3). The code for it is in `sepsis_ed/sepsis3.py` and runs with
+  `--sepsis3`, but it was not used for these results.
+- Validation on NSW emergency department data, with ethics approval and an equity audit that includes
+  Aboriginal and Torres Strait Islander patients.
+
+## Team
+
+Charles Darwin University.
+
+- Sandesh Paudel: analysis pipeline and prototype
+- Rupesh Ghimire: study protocol and poster
+
+## Acknowledgements
+
+- Antibiotic and culture code lists in `sepsis_ed/sepsis3.py` are adapted from MIMIC-Sepsis
+  (Huang et al., 2025, MIT licence).
+- Parts of the code were written with help from Claude, an AI assistant by Anthropic. The team made and
+  checked every analysis choice and number. No patient-level data was shared with any AI tool.
+
+## References
+
+1. A. E. W. Johnson et al., "MIMIC-IV, a freely accessible electronic health record dataset," *Sci. Data*,
+   vol. 10, 2023.
+2. A. Johnson, L. Bulgarelli, T. Pollard, L. A. Celi, R. Mark, and S. Horng, "MIMIC-IV-ED (version 2.2),"
+   PhysioNet, 2023.
+3. A. L. Goldberger et al., "PhysioBank, PhysioToolkit, and PhysioNet," *Circulation*, vol. 101, no. 23,
+   pp. e215–e220, 2000.
+4. F. Xie et al., "Benchmarking emergency department prediction models with machine learning and public
+   electronic health records," *Sci. Data*, vol. 9, 2022.
+5. M. Singer et al., "The Third International Consensus Definitions for Sepsis and Septic Shock
+   (Sepsis-3)," *JAMA*, vol. 315, no. 8, pp. 801–810, 2016.
+
+## Licence
+
+Code: MIT (see [LICENSE](LICENSE)). MIMIC data is not included and is subject to the PhysioNet
+credentialed data use agreement.

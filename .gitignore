@@ -1,1 +1,23 @@
 .DS_Store
+
+# Patient data and anything derived from it at patient level. Never commit.
+data/
+data_real/
+out/
+*.parquet
+
+# Team-only planning documents
+Docs/*
+!Docs/Documents/
+Docs/Documents/*
+!Docs/Documents/Project Plan & Study Protocol — Explainable Sepsis Risk at ED Triage.pdf
+
+# Synthetic test data (python tests/make_synthetic.py)
+syn/
+syn_out/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/

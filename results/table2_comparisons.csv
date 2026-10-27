@@ -1,0 +1,13 @@
+outcome,method,operating_point,metric,estimate,lo,hi
+sepsis_icd,xgboost minus logistic,all,auroc,0.00614837027947146,0.003841328213943457,0.008539101766136478
+sepsis_icd,xgboost minus logistic,all,auprc,0.0213982776868048,0.009911477173292693,0.03236057693332137
+sepsis_icd,xgboost minus random_forest,all,auroc,0.008046872100693325,0.005443135609680044,0.01084313550745155
+sepsis_icd,xgboost minus random_forest,all,auprc,0.027604585713015495,0.01556234614710435,0.039745093585843945
+sepsis_icd,xgboost minus SIRS (triage),matched alert rate 5.3%,sensitivity,0.3169761273209549,0.2874075492782508,0.34682273731620694
+sepsis_icd,xgboost minus SIRS (triage),all,auroc,0.21689056237635318,0.20394730873355518,0.23029456438617024
+sepsis_icd,xgboost minus qSOFA (triage),matched alert rate 0.7%,sensitivity,0.08819628647214854,0.06423913713859736,0.11088860600578589
+sepsis_icd,xgboost minus qSOFA (triage),all,auroc,0.25807887603888013,0.2460803578778469,0.270459763968876
+sepsis_icd,xgboost minus Modified NEWS (triage),matched alert rate 2.9%,sensitivity,0.16976127320954904,0.14152032441421566,0.19739712869148954
+sepsis_icd,xgboost minus Modified NEWS (triage),all,auroc,0.11803803881541641,0.10750327262809452,0.12857458436172342
+sepsis_icd,xgboost minus Triage acuity,matched alert rate 37.7%,sensitivity,0.2413793103448275,0.21721956107721288,0.26637561067284027
+sepsis_icd,xgboost minus Triage acuity,all,auroc,0.21542051334647405,0.20297659473449325,0.22780905327791556
