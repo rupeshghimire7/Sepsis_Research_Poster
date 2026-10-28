@@ -3,6 +3,8 @@
 # Patient data and anything derived from it at patient level. Never commit.
 data/
 data_real/
+data_demo/
+demo_out/
 out/
 *.parquet
 
@@ -11,6 +13,7 @@ Docs/*
 !Docs/Documents/
 Docs/Documents/*
 !Docs/Documents/Project Plan & Study Protocol — Explainable Sepsis Risk at ED Triage.pdf
+!Docs/Documents/Prototype.png
 
 # Synthetic test data (python tests/make_synthetic.py)
 syn/

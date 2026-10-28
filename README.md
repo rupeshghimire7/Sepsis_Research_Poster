@@ -33,6 +33,13 @@ All tables and figures are in [`results/`](results). The full findings are in
 
 ![Cases found at the same number of alerts](results/fig_rules_matched.png)
 
+## Prototype
+
+The traffic-light prototype takes one patient's triage information and returns a risk tier, the
+estimated risk and the top three reasons. The patient below is invented.
+
+![Traffic-light prototype showing a low-risk result for an invented patient](Docs/Documents/Prototype.png)
+
 ## How it works
 
 1. **Cohort.** One row per adult ED visit with at least one triage vital sign.
@@ -63,6 +70,19 @@ python tests/make_synthetic.py syn 20000
 python run.py --mimic-dir syn/mimic --ed-dir syn/ed --out syn_out
 python run.py --out syn_out --open-test
 python app/traffic_light.py --bundle syn_out/models/bundle.joblib      # http://localhost:8050
+```
+
+**With the open demo data.** PhysioNet publishes free 100-patient demo versions of both datasets.
+No credential is needed. They are useful for checking that the data loads, but they are too small
+for the model stage (it needs at least 30 sepsis cases in each split).
+
+- MIMIC-IV-ED demo: <https://physionet.org/content/mimic-iv-ed-demo/2.2/> (contains `ed/`)
+- MIMIC-IV demo: <https://physionet.org/content/mimic-iv-demo/2.2/> (contains `hosp/` and `icu/`)
+
+```bash
+wget -r -N -c -np -nH --cut-dirs=3 -P data_demo/mimic-iv-ed https://physionet.org/files/mimic-iv-ed-demo/2.2/
+wget -r -N -c -np -nH --cut-dirs=3 -P data_demo/mimic-iv https://physionet.org/files/mimic-iv-demo/2.2/
+python run.py --mimic-dir data_demo/mimic-iv --ed-dir data_demo/mimic-iv-ed --out demo_out
 ```
 
 **With MIMIC data.** You need your own PhysioNet credential.
@@ -112,13 +132,16 @@ results/            aggregate results from the real data (no patient-level data)
 
 ## Team
 
-Charles Darwin University.
+Faculty of Science and Technology, Charles Darwin University, Sydney.
 
-- Sandesh Paudel: analysis pipeline and prototype
-- Rupesh Ghimire: study protocol and poster
+- Sandesh Prasad Paudel
+- Rupesh Ghimire
+- Sujan Sigdel
+- Sharad Kumar Ranabhat
 
 ## Acknowledgements
 
+- Dr. Pritika (IT Lecturer, CDU) provided the reference for our PhysioNet credentialed data access.
 - Antibiotic and culture code lists in `sepsis_ed/sepsis3.py` are adapted from MIMIC-Sepsis
   (Huang et al., 2025, MIT licence).
 - Parts of the code were written with help from Claude, an AI assistant by Anthropic. The team made and
