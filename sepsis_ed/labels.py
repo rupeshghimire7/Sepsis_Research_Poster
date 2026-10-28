@@ -7,7 +7,7 @@ import pandas as pd
 
 from .io import exists, hours, read
 
-# ---------------------------------------------------------------- ICD codes
+# ICD codes
 ICD10 = ("A40", "A41", "R652")
 ICD9 = ("038", "99591", "99592", "78552")
 

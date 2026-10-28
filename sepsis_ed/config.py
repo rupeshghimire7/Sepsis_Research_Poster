@@ -1,4 +1,4 @@
-"""Load config.yaml (every analysis choice lives there)."""
+"""Load config.yaml"""
 from pathlib import Path
 
 import yaml

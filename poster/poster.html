@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sepsis Triage Poster</title>
+<!-- A0 portrait (841 x 1189 mm). Build the PDF with poster/build.sh. Every number comes from results/. -->
+<style>
+@page { size: 841mm 1189mm; margin: 0; }
+:root {
+  --ink: #111111; --ink2: #44443f; --muted: #77766f; --line: #d9d8d2; --soft: #f3f6fa;
+  --accent: #1a5aa6; --model: #2a78d6; --rule: #a9a8a0;
+  --low: #0ca30c; --mod: #f2a900; --high: #d03b3b;
+}
+* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+html, body { margin: 0; background: #ffffff; }
+body { font-family: Arial, Helvetica, sans-serif; color: var(--ink); }
+
+.page {
+  width: 841mm; height: 1189mm; padding: 22mm 25mm 20mm; overflow: hidden;
+  display: grid; grid-template-rows: auto auto 1fr auto; row-gap: 12mm;
+}
+
+/* ---------- header ---------- */
+header {
+  border-bottom: 2.2mm solid var(--accent); padding-bottom: 8mm; }
+h1 { font-size: 90pt; line-height: 1.06; margin: 0 0 6mm; letter-spacing: -0.5pt; }
+.authors { font-size: 42pt; font-weight: bold; margin: 0 0 2.5mm; }
+.affil { font-size: 30pt; color: var(--ink2); margin: 0; }
+.event { text-align: right; font-size: 28pt; color: var(--ink2); line-height: 1.3; }
+.event b { display: block; color: var(--accent); font-size: 34pt; }
+.todo { background: #fff1a8; padding: 0 2mm; }
+
+/* ---------- headline numbers ---------- */
+.headline { display: grid; grid-template-columns: 1.25fr 1fr 1fr; background: var(--soft);
+  border-radius: 4mm; padding: 9mm 10mm; column-gap: 10mm; }
+.stat { display: flex; align-items: center; gap: 6mm; }
+.stat + .stat { border-left: 0.6mm solid var(--line); padding-left: 10mm; }
+.big { font-size: 84pt; font-weight: bold; color: var(--accent); line-height: 1; white-space: nowrap; }
+.big small { font-size: 40pt; color: var(--ink2); font-weight: bold; }
+.stat p { font-size: 28pt; line-height: 1.22; margin: 0; }
+
+/* ---------- columns ---------- */
+.cols { display: grid; grid-template-columns: repeat(3, 1fr); column-gap: 20mm; min-height: 0; }
+.col { display: flex; flex-direction: column; gap: 11mm; min-height: 0; }
+.fill { flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+.meth { justify-content: flex-start; }
+.meth .steps { flex: 1; }
+.meth .step { flex: 1 1 auto; }
+h2 { font-size: 48pt; color: var(--accent); margin: 0 0 5mm; padding-bottom: 2mm;
+  border-bottom: 0.8mm solid var(--line); line-height: 1.1; }
+h2 .n { color: var(--muted); margin-right: 4mm; }
+p, li { font-size: 28pt; line-height: 1.26; }
+p { margin: 0 0 3mm; }
+ul { margin: 0; padding-left: 0; list-style: none; }
+li { position: relative; padding-left: 8mm; margin-bottom: 3.5mm; }
+li::before { content: ""; position: absolute; left: 0; top: 0.5em; width: 3mm; height: 3mm;
+  border-radius: 50%; background: var(--accent); }
+.question { font-size: 31pt; font-weight: bold; line-height: 1.22; margin-bottom: 4mm; }
+.cap { font-size: 24pt; line-height: 1.22; color: var(--ink2); margin: 3.5mm 0 0; }
+.cap b { color: var(--ink); }
+.tabcap { font-size: 24pt; text-align: center; margin: 0 0 2mm; color: var(--ink2); }
+.tabcap b { display: block; color: var(--ink); letter-spacing: 1pt; }
+
+/* ---------- Fig. 1 pipeline ---------- */
+.steps { display: flex; flex-direction: column; }
+.step { display: grid; grid-template-columns: 18mm 1fr; column-gap: 5mm; position: relative; padding-bottom: 4mm; }
+.step:not(:last-child)::after { content: ""; position: absolute; left: 8.6mm; top: 18mm; bottom: 0;
+  width: 0.8mm; background: var(--line); }
+.dot { width: 18mm; height: 18mm; border-radius: 50%; background: var(--accent); color: #fff;
+  font-size: 30pt; font-weight: bold; display: flex; align-items: center; justify-content: center; }
+.step b { font-size: 30pt; display: block; line-height: 1.15; padding-top: 2.5mm; }
+.step span { font-size: 27pt; color: var(--ink2); line-height: 1.22; display: block; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 3mm; }
+.chip { font-size: 26pt; border: 0.6mm solid var(--line); border-radius: 10mm; padding: 1.5mm 5mm; }
+.chip.k { border-color: var(--accent); color: var(--accent); font-weight: bold; }
+
+/* ---------- Fig. 2 matched bars ---------- */
+.legend { display: flex; gap: 8mm; font-size: 26pt; margin-bottom: 6mm; }
+.sw { display: inline-block; width: 7mm; height: 7mm; border-radius: 1mm; vertical-align: -0.8mm; margin-right: 2mm; }
+.grp { margin-bottom: 8mm; }
+.grp-h { display: flex; justify-content: space-between; font-size: 26pt; margin-bottom: 1mm; }
+.grp-h b { font-size: 28pt; }
+.bar.m, .bar.r { height: 16mm; }
+.grp-h .d { color: var(--accent); font-weight: bold; }
+.bar { display: flex; align-items: center; height: 12mm; margin-bottom: 1.2mm; }
+.bar i { display: block; height: 100%; border-radius: 0 1.2mm 1.2mm 0; }
+.bar em { font-style: normal; font-size: 28pt; font-weight: bold; margin-left: 2.5mm; }
+.bar.m i { background: var(--model); } .bar.r i { background: var(--rule); }
+.bar.r em { color: var(--ink2); font-weight: normal; }
+
+/* ---------- Table I ---------- */
+table { width: 100%; border-collapse: collapse; font-size: 25pt; }
+th, td { padding: 3mm 2mm; text-align: right; }
+th:first-child, td:first-child { text-align: left; }
+thead th { border-top: 0.6mm solid var(--ink); border-bottom: 0.4mm solid var(--ink); font-weight: bold; }
+tbody tr:last-child td { border-bottom: 0.6mm solid var(--ink); }
+tr.best td { font-weight: bold; color: var(--accent); }
+tr.sep td { border-top: 0.3mm solid var(--line); }
+td .ci { font-weight: normal; color: var(--muted); font-size: 21pt; }
+
+/* ---------- Fig. 3 tiers ---------- */
+.stack-row { display: grid; grid-template-columns: 50mm 1fr; align-items: center; column-gap: 3mm; margin-bottom: 4mm; }
+.stack-row > span { font-size: 26pt; font-weight: bold; }
+.stack { display: flex; height: 22mm; border-radius: 1.5mm; overflow: hidden; }
+.stack i { display: flex; align-items: center; justify-content: center; font-style: normal;
+  font-size: 25pt; font-weight: bold; color: #fff; }
+.stack .lo { background: var(--low); } .stack .mo { background: var(--mod); color: #111; } .stack .hi { background: var(--high); }
+.tiers td:first-child { white-space: nowrap; }
+.tdot { display: inline-block; width: 6mm; height: 6mm; border-radius: 50%; margin-right: 2.5mm; vertical-align: -0.5mm; }
+.proto { display: inline-block; font-size: 24pt; font-weight: bold; color: #7a4a00; background: #fff1c9;
+  border-radius: 1.5mm; padding: 1mm 3mm; margin-top: 3mm; }
+.shot { width: 100%; border: 0.6mm solid var(--line); border-radius: 2mm; display: block; }
+
+/* ---------- Fig. 5 / 6 horizontal bars ---------- */
+.hb { display: grid; grid-template-columns: 92mm 1fr; align-items: center; column-gap: 3mm; margin-bottom: 2.2mm; }
+.hb > span { font-size: 26pt; text-align: right; line-height: 1.1; }
+.hb .track { position: relative; height: 11mm; display: flex; align-items: center; }
+.hb .track i { display: block; height: 100%; background: var(--model); border-radius: 0 1.2mm 1.2mm 0; }
+.hb .track em { font-style: normal; font-size: 25pt; margin-left: 2mm; white-space: nowrap; color: var(--ink2); }
+.hb .track em b { color: var(--ink); }
+.fair .hb { grid-template-columns: 62mm 1fr; }
+.fair .track i.all { background: var(--rule); opacity: 1; }
+.fair .track i.flag { background: var(--accent); opacity: 1; }
+.fair .track i { opacity: 0.55; }
+
+
+.arch { display: grid; grid-template-columns: 1fr 14mm 1fr; row-gap: 3mm; align-items: stretch; }
+.box { border: 0.7mm solid var(--accent); border-radius: 2.5mm; padding: 4mm 5mm; background: #fff; }
+.box b { display: block; font-size: 28pt; line-height: 1.15; color: var(--accent); }
+.box span { display: block; font-size: 25pt; line-height: 1.2; color: var(--ink2); margin-top: 1mm; }
+.arr { display: flex; align-items: center; justify-content: center; font-size: 44pt; color: var(--accent); font-weight: bold; }
+.arr.down { grid-column: 3; height: 10mm; }
+.built { font-size: 32pt; font-weight: bold; color: var(--accent); margin: 7mm 0 3mm; }
+.abstract p { font-size: 28pt; }
+.ctx .row-h { font-size: 26pt; margin-bottom: 1mm; display: flex; justify-content: space-between; }
+.ctx .bar { height: 15mm; margin-bottom: 5mm; }
+.ctx .bar i { background: var(--model); }
+.ctx .bar.v i { opacity: 0.5; }
+.axisnote { font-size: 21pt; color: var(--muted); margin: 0 0 2mm; }
+
+/* ---------- footer ---------- */
+footer { display: grid; grid-template-columns: 2fr 1fr auto; column-gap: 14mm;
+  border-top: 1mm solid var(--line); padding-top: 6mm; align-items: start; }
+footer h3 { font-size: 26pt; margin: 0 0 2mm; color: var(--accent); }
+.refs { margin: 0; padding-left: 12mm; font-size: 20pt; line-height: 1.25; }
+.refs li { font-size: 20pt; padding-left: 1mm; margin-bottom: 1mm; }
+.refs li::before { content: none; }
+.ack { font-size: 20pt; line-height: 1.28; margin: 0 0 2mm; color: var(--ink2); }
+.qr { text-align: center; }
+.qr img { width: 66mm; height: 66mm; display: block; }
+.qr small { display: block; font-size: 16pt; color: var(--ink2); }
+.qr span { font-size: 22pt; font-weight: bold; display: block; margin-top: 1mm; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div>
+      <h1>Spotting Sepsis in the Waiting Room: Explainable Risk Prediction from Triage Data</h1>
+      <p class="authors">Sandesh Prasad Paudel, Rupesh Ghimire, Sujan Sigdel, Sharad Kumar Ranabhat</p>
+      <p class="affil">Faculty of Science and Technology, Charles Darwin University, Sydney</p>
+    </div>
+  </header>
+
+  <section class="headline" aria-label="Key results">
+    <div class="stat"><div class="big">58 <small>vs</small> 27</div>
+      <p>sepsis cases in 100 found by the model vs the SIRS rule, <b>flagging the same 5.3% of arrivals</b></p></div>
+    <div class="stat"><div class="big">0.925</div>
+      <p>AUROC from triage data alone<br>(95% CI 0.919–0.932)</p></div>
+    <div class="stat"><div class="big">56%</div>
+      <p>of sepsis cases fall in the red tier, which flags <b>5% of arrivals</b></p></div>
+  </section>
+
+  <main class="cols">
+    <!-- ================= column 1 ================= -->
+    <div class="col">
+      <section class="abstract">
+        <h2>Abstract</h2>
+        <p>Can triage data alone flag sepsis? On 409,216 adult ED visits (MIMIC-IV-ED), XGBoost ranked risk in unseen
+          patients with AUROC 0.925 and, at equal workload, found more cases than SIRS, qSOFA, NEWS or nurse
+          acuity, with three reasons for every flag.</p>
+      </section>
+
+      <section>
+        <h2><span class="n">1.</span>Background</h2>
+        <p>Sepsis is linked to one in five deaths worldwide [1]. Patients who look stable at triage can
+          deteriorate in a crowded waiting room. NSW Health’s SAFE-WAIT trial (Western Sydney, from 2027) shows
+          the problem matters here.</p>
+      </section>
+
+      <section>
+        <h2><span class="n">2.</span>Objectives</h2>
+        <ul>
+          <li>Rank risk in patients the model has never seen</li>
+          <li>Beat SIRS, qSOFA, NEWS and nurse acuity at equal workload</li>
+          <li>Give a calibrated low / moderate / high tier</li>
+          <li>Show the reasons behind each flag</li>
+          <li>Check performance across patient groups</li>
+        </ul>
+      </section>
+
+      <section class="fill meth">
+        <h2><span class="n">3.</span>Methodology</h2>
+        <div class="steps">
+          <div class="step"><div class="dot">1</div><div><b>Data: MIMIC-IV-ED v2.2</b>
+            <span>425,087 ED visits, Boston, 2011–2019 [2], [3]</span></div></div>
+          <div class="step"><div class="dot">2</div><div><b>Cohort: 409,216 adult visits</b>
+            <span>196,624 patients; 10,092 (2.5%) with sepsis coded</span></div></div>
+          <div class="step"><div class="dot">3</div><div><b>62 triage-time features</b>
+            <span>Vitals, age, sex, complaint, arrival, past visits. No blood tests</span></div></div>
+          <div class="step"><div class="dot">4</div><div><b>Split by patient 70 / 15 / 15</b>
+            <span>Train · calibrate and set cut-offs · test once, then locked</span></div></div>
+          <div class="step"><div class="dot">5</div><div><b>Three models</b>
+            <span>Logistic regression, random forest, XGBoost [4]; 5-fold CV grouped by patient</span></div></div>
+          <div class="step"><div class="dot">6</div><div><b>Evaluate and explain</b>
+            <span>1,000 patient bootstrap resamples for 95% CIs; SHAP [5]; subgroup audit</span></div></div>
+        </div>
+        <p class="cap"><b>Fig. 1.</b> Pipeline. Only information known at triage enters the model.</p>
+      </section>
+
+      <section>
+        <h2><span class="n">4.</span>System Architecture</h2>
+        <div class="arch">
+          <div class="box"><b>Triage form</b><span>Vitals, complaint, arrival, history</span></div>
+          <div class="arr">→</div>
+          <div class="box"><b>Feature builder</b><span>Same code as training: no drift</span></div>
+          <div class="arr down">↓</div>
+          <div class="box"><b>Traffic light + reasons</b><span>Tier, risk and top three SHAP reasons</span></div>
+          <div class="arr">←</div>
+          <div class="box"><b>XGBoost</b><span>Isotonic-calibrated risk, tier cut-offs</span></div>
+        </div>
+        <p class="cap"><b>Fig. 2.</b> Prototype: an offline web app that scores one patient with the trained model.</p>
+        <p class="built">Key Technologies</p>
+        <div class="chips">
+          <span class="chip k">Python</span><span class="chip k">XGBoost</span><span class="chip k">SHAP</span>
+          <span class="chip">scikit-learn</span><span class="chip">pandas</span><span class="chip">matplotlib</span>
+          <span class="chip">pytest</span><span class="chip">HTML / JS</span>
+        </div>
+      </section>
+    </div>
+
+    <!-- ================= column 2 ================= -->
+    <div class="col">
+      <section class="fill">
+        <div>
+        <h2><span class="n">5.</span>Results</h2>
+        <div class="legend"><span><i class="sw" style="background:var(--model)"></i>Model (XGBoost)</span>
+          <span><i class="sw" style="background:var(--rule)"></i>Screening rule</span></div>
+
+        <div class="grp"><div class="grp-h"><span><b>SIRS ≥ 2</b> · flags 5.3%</span><span class="d">+32 (29–35)</span></div>
+          <div class="bar m"><i style="width:58.4%"></i><em>58</em></div>
+          <div class="bar r"><i style="width:26.7%"></i><em>27</em></div></div>
+        <div class="grp"><div class="grp-h"><span><b>NEWS ≥ 5</b> · flags 2.9%</span><span class="d">+17 (14–20)</span></div>
+          <div class="bar m"><i style="width:43.5%"></i><em>44</em></div>
+          <div class="bar r"><i style="width:26.5%"></i><em>27</em></div></div>
+        <div class="grp"><div class="grp-h"><span><b>qSOFA ≥ 2</b> · flags 0.7%</span><span class="d">+9 (6–11)</span></div>
+          <div class="bar m"><i style="width:17.8%"></i><em>18</em></div>
+          <div class="bar r"><i style="width:9.0%"></i><em>9</em></div></div>
+        <div class="grp"><div class="grp-h"><span><b>Nurse acuity 1–2</b> · flags 37.7%</span><span class="d">+24 (22–27)</span></div>
+          <div class="bar m"><i style="width:95.7%"></i><em>96</em></div>
+          <div class="bar r"><i style="width:71.6%"></i><em>72</em></div></div>
+        <p class="cap"><b>Fig. 3.</b> At the same number of alerts, the model found more sepsis cases (per 100)
+          than every rule. Difference in points, 95% CI. Test set: 61,690 visits, 1,508 cases.</p>
+        </div>
+        <div>
+        <p class="tabcap"><b>TABLE I</b>Ranking performance on the test set (sepsis rate 2.4%)</p>
+        <table>
+          <thead><tr><th>Method</th><th>AUROC <span class="ci">(95% CI)</span></th><th>AUPRC</th></tr></thead>
+          <tbody>
+            <tr class="best"><td>XGBoost</td><td>0.925 <span class="ci">(0.919–0.932)</span></td><td>0.360</td></tr>
+            <tr><td>Logistic regression</td><td>0.919 <span class="ci">(0.912–0.926)</span></td><td>0.338</td></tr>
+            <tr><td>Random forest</td><td>0.917 <span class="ci">(0.910–0.924)</span></td><td>0.332</td></tr>
+            <tr class="sep"><td>NEWS (triage)</td><td>0.807 <span class="ci">(0.795–0.819)</span></td><td>0.148</td></tr>
+            <tr><td>Nurse acuity</td><td>0.710 <span class="ci">(0.697–0.722)</span></td><td>0.057</td></tr>
+            <tr><td>SIRS (triage)</td><td>0.709 <span class="ci">(0.695–0.721)</span></td><td>0.065</td></tr>
+            <tr><td>qSOFA (triage)</td><td>0.667 <span class="ci">(0.655–0.680)</span></td><td>0.076</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <div class="ctx">
+        <div class="row-h"><span><b>Vital signs only</b> (26 features)</span><b>0.887</b></div>
+        <div class="bar v"><i style="width:77.4%"></i></div>
+        <div class="row-h"><span><b>+ complaint, arrival, history</b> (62)</span><b>0.925</b></div>
+        <div class="bar"><i style="width:85.1%"></i></div>
+        <div class="row-h"><span><b>+ nurse acuity</b> (64)</span><b>0.926</b></div>
+        <div class="bar"><i style="width:85.2%"></i></div>
+        <p class="axisnote">AUROC; bars start at 0.5 (chance)</p>
+        <p class="cap"><b>Fig. 4.</b> Context beyond vital signs lifts AUROC by 0.039; the nurse’s acuity
+          score adds almost nothing (+0.001).</p>
+        </div>
+      </section>
+
+      <section>
+        <h2><span class="n">6.</span>Traffic-Light Risk Tiers</h2>
+        <div class="stack-row"><span>Arrivals</span>
+          <div class="stack"><i class="lo" style="width:80.2%">80%</i><i class="mo" style="width:15.0%">15%</i><i class="hi" style="width:4.8%"></i></div></div>
+        <div class="stack-row"><span>Sepsis cases</span>
+          <div class="stack"><i class="lo" style="width:12.3%">12%</i><i class="mo" style="width:31.7%">32%</i><i class="hi" style="width:56.0%">56%</i></div></div>
+        <table class="tiers" style="margin-top:3mm">
+          <thead><tr><th>Tier</th><th>Arrivals</th><th>Had sepsis</th><th>Predicted</th></tr></thead>
+          <tbody>
+            <tr><td><i class="tdot" style="background:var(--high)"></i>High</td><td>4.9%</td><td>28 in 100</td><td>28 in 100</td></tr>
+            <tr><td><i class="tdot" style="background:var(--mod)"></i>Moderate</td><td>15.0%</td><td>5.2 in 100</td><td>4.9 in 100</td></tr>
+            <tr><td><i class="tdot" style="background:var(--low)"></i>Low</td><td>80.2%</td><td>0.4 in 100</td><td>0.5 in 100</td></tr>
+          </tbody>
+        </table>
+        <p class="cap"><b>Fig. 5.</b> The red tier is 5% of arrivals but holds 56% of sepsis cases, and
+          predicted risk matches what happened (calibration slope 1.02).</p>
+        <span class="proto">⚠ Research prototype, not for clinical use</span>
+      </section>
+    </div>
+
+    <!-- ================= column 3 ================= -->
+    <div class="col">
+      <section>
+        <h2><span class="n">7.</span>What Drives the Risk</h2>
+        <div class="hb"><span>Age</span><div class="track"><i style="width:78%"></i><em>↑ older</em></div></div>
+        <div class="hb"><span>Shock index</span><div class="track"><i style="width:47.3%"></i><em>↑ higher</em></div></div>
+        <div class="hb"><span>Walked in</span><div class="track"><i style="width:35.4%"></i><em>↓ lowers risk</em></div></div>
+        <div class="hb"><span>No. of abnormal vitals</span><div class="track"><i style="width:34.7%"></i><em>↑ more</em></div></div>
+        <div class="hb"><span>Temperature</span><div class="track"><i style="width:33%"></i><em>↑ higher</em></div></div>
+        <div class="hb"><span>Heart rate</span><div class="track"><i style="width:21.3%"></i><em>↑ higher</em></div></div>
+        <div class="hb"><span>Complaint: fever</span><div class="track"><i style="width:19.3%"></i><em>↑ present</em></div></div>
+        <div class="hb"><span>Previous sepsis</span><div class="track"><i style="width:18.9%"></i><em>↑ yes</em></div></div>
+        <p class="cap"><b>Fig. 6.</b> Top drivers by mean |SHAP|. They are clinically recognisable, and the
+          ranking agreed with permutation importance (ρ = 0.76).</p>
+      </section>
+
+      <section>
+        <h2><span class="n">8.</span>Demonstration</h2>
+        <img class="shot" src="assets/demo_result.png" alt="Prototype result for an invented patient: high risk, 53%, with three reasons">
+        <p class="cap"><b>Fig. 7.</b> Prototype output for an invented patient: 78-year-old by ambulance with fever
+          and cough, temperature 38.6 °C, heart rate 112, blood pressure 104/62. Every flag shows its top three reasons.</p>
+      </section>
+
+      <section class="fair">
+        <h2><span class="n">9.</span>Who It Works For</h2>
+        <div class="hb"><span><b>All patients</b></span><div class="track"><i class="all" style="width:56%"></i><em><b>56%</b></em></div></div>
+        <div class="hb"><span>Female</span><div class="track"><i style="width:52.8%"></i><em><b>53%</b></em></div></div>
+        <div class="hb"><span>Male</span><div class="track"><i style="width:58.9%"></i><em><b>59%</b></em></div></div>
+        <div class="hb"><span>Age 18–44</span><div class="track"><i class="flag" style="width:30.5%"></i><em><b>30%</b></em></div></div>
+        <div class="hb"><span>Age 45–64</span><div class="track"><i style="width:56%"></i><em><b>56%</b></em></div></div>
+        <div class="hb"><span>Age 65–79</span><div class="track"><i style="width:58.8%"></i><em><b>59%</b></em></div></div>
+        <div class="hb"><span>Age 80+</span><div class="track"><i style="width:63.8%"></i><em><b>64%</b></em></div></div>
+        <div class="hb"><span>Walk-in</span><div class="track"><i class="flag" style="width:40.3%"></i><em><b>40%</b></em></div></div>
+        <div class="hb"><span>Ambulance</span><div class="track"><i style="width:62.3%"></i><em><b>62%</b></em></div></div>
+        <p class="cap"><b>Fig. 8.</b> Share of sepsis cases put in the red tier. Ranking held in all 20 groups
+          (AUROC 0.89–0.94), but young adults and walk-ins, where sepsis is rarer, are flagged less often.</p>
+      </section>
+
+      <section>
+        <h2><span class="n">10.</span>Conclusions</h2>
+        <ul>
+          <li>Triage data alone found twice as many sepsis cases as SIRS at the same workload.</li>
+          <li>Logistic regression came within 0.006 AUROC: a transparent model is nearly as good.</li>
+          <li><b>Limits:</b> one US hospital, retrospective; sepsis defined by diagnosis codes.</li>
+          <li><b>Next:</b> ethics approval, de-identified NSW data, and an equity audit including Aboriginal and
+            Torres Strait Islander patients.</li>
+        </ul>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <div>
+      <h3>References</h3>
+      <ol class="refs">
+        <li>K. E. Rudd <i>et al.</i>, “Global, regional, and national sepsis incidence and mortality, 1990–2017,” <i>Lancet</i>, vol. 395, no. 10219, pp. 200–211, 2020.</li>
+        <li>A. E. W. Johnson <i>et al.</i>, “MIMIC-IV, a freely accessible electronic health record dataset,” <i>Sci. Data</i>, vol. 10, Art. no. 1, 2023.</li>
+        <li>A. Johnson <i>et al.</i>, “MIMIC-IV-ED (version 2.2),” PhysioNet, 2023, doi: 10.13026/5ntk-km72.</li>
+        <li>T. Chen and C. Guestrin, “XGBoost: A scalable tree boosting system,” in <i>Proc. 22nd ACM SIGKDD</i>, 2016, pp. 785–794.</li>
+        <li>S. M. Lundberg and S.-I. Lee, “A unified approach to interpreting model predictions,” in <i>Proc. NeurIPS</i>, 2017, pp. 4765–4774.</li>
+      </ol>
+    </div>
+    <div>
+      <h3>Acknowledgements</h3>
+      <p class="ack">Data accessed through PhysioNet credentialed access. Patient-level data never left the
+        analysis laptop; only aggregate results are shared, with counts below 10 suppressed.</p>
+      <p class="ack">Sepsis-3 code lists adapted from MIMIC-Sepsis (MIT licence). Parts of the code were written
+        with help from Claude (Anthropic); the team made and checked every analysis choice and number.</p>
+    </div>
+    <div class="qr">
+      <img src="assets/qr_github.svg" alt="QR code to the GitHub repository">
+      <span>GitHub repository</span><small>github.com/rupeshghimire7/<br>Sepsis_Research_Poster</small>
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>

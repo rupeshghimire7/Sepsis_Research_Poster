@@ -1,4 +1,4 @@
-"""File access for MIMIC-IV / MIMIC-IV-ED (demo or full). Accepts .csv.gz or .csv."""
+"""File access for MIMIC-IV / MIMIC-IV-ED"""
 from pathlib import Path
 
 import pandas as pd

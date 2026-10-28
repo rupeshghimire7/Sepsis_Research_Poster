@@ -10,7 +10,6 @@ seed: 42
 
 cohort:
   min_age: 18
-  # A stay is dropped only when none of these six is recorded (after cleaning).
   vitals: [temperature, heartrate, resprate, o2sat, sbp, dbp]
 
 cleaning:
@@ -32,16 +31,17 @@ cleaning:
 outcomes:
   primary: sepsis_icd
   secondary: critical
+
   # Primary: any sepsis code on the ED stay (ed/diagnosis) or its linked admission (hosp/diagnoses_icd).
-  # Prefix match after removing dots.
   sepsis_icd:
     icd10: [A40, A41, R6520, R6521]
     icd9: ["038", "99591", "99592", "78552"]
+
   # Secondary: in-hospital death, death in the ED, or ICU admission within `icu_within_hours` of ED arrival.
   critical:
     icu_within_hours: 12
-  # Not used yet: a later check with a clinical sepsis definition (sepsis_ed/sepsis3.py, --sepsis3).
-  # Needs the large chartevents and labevents tables.
+
+  # sepsis3: Not used yet: a check with a clinical sepsis definition 
   sepsis3:
     enabled: false
     horizon_hours: 48
@@ -110,10 +110,12 @@ modelling:
   secondary_outcome: true         # also fit XGBoost (set B) for the critical-deterioration outcome
   cv_folds: 5                     # grouped by patient, inside the training split
   n_jobs: -1
+
   # Random search, scored on AUPRC. No class weights, oversampling or SMOTE.
   logistic:
     n_iter: 25
     C: [0.0001, 10]               # log-uniform
+
   random_forest:
     n_iter: 8
     n_estimators: [300, 500]
@@ -121,6 +123,7 @@ modelling:
     max_features: [sqrt, 0.3]
     max_samples: [0.2, 0.3]       # rows per tree
     tune_max_stays: 60000         # tune on a patient sample of the training split; refit on all of it
+
   xgboost:
     n_iter: 25
     max_depth: [3, 6]
@@ -154,7 +157,7 @@ fairness:
     HISPANIC: Hispanic/Latino
     ASIAN: Asian
 
-audit:                            # python run.py --audit  (train + validation only; does not open test)
+audit:                            # python run.py --audit 
   # Chief complaints that may already name the diagnosis. Known at triage, but they make the task easier.
   complaint_flags:
     sepsis: 'seps|septic'
