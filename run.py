@@ -9,7 +9,11 @@ python run.py --open-test
     Step 2, once: score the saved models on the test split and write tables, figures and findings.
     After this, step 1 refuses to retrain.
 
-Other flags: --data-only stops after the data stage; --sepsis3 adds the Sepsis-3 label (not used yet);
+python run.py --sepsis3-check
+    Optional, after step 2: score the locked models against a clinical Sepsis-3 label (nothing is retrained).
+    Needs the extra tables listed in sepsis_ed/sepsis3.py.
+
+Other flags: --data-only stops after the data stage; --sepsis3 adds the Sepsis-3 label to the analysis table;
 --reopen-test overrides the test lock (report it if you use it).
 """
 import argparse
@@ -94,6 +98,8 @@ def main():
     ap.add_argument("--sepsis3", action="store_true", help="also build the Sepsis-3 label (reads chartevents)")
     ap.add_argument("--data-only", action="store_true", help="stop after the data stage")
     ap.add_argument("--audit", action="store_true", help="leakage checks + rules preview on train/validation")
+    ap.add_argument("--sepsis3-check", action="store_true",
+                    help="locked models vs triage rules with Sepsis-3 as the outcome (after --open-test)")
     ap.add_argument("--open-test", action="store_true", help="evaluate the saved models on the test split")
     ap.add_argument("--reopen-test", action="store_true", help="override the test lock (report that you did)")
     a = ap.parse_args()
@@ -115,6 +121,19 @@ def main():
         t0 = time.time()
         run_audit(pd.read_parquet(out / "analysis_table.parquet"), joblib.load(bundle_path), ed, out, cfg)
         print(f"\ndone in {time.time() - t0:.0f}s; files: {out}/audit_*.csv")
+        return
+
+    if a.sepsis3_check:
+        if not (bundle_path.exists() and lock and lock["bundle_sha256"] == sha256(bundle_path)):
+            sys.exit("Run `python run.py --open-test` first: the Sepsis-3 check uses the locked models.")
+        from sepsis_ed.report import publish
+        from sepsis_ed.sepsis3_check import run_sepsis3_check
+        print("Sepsis-3 check with the locked models (nothing is retrained)")
+        t0 = time.time()
+        run_sepsis3_check(pd.read_parquet(out / "analysis_table.parquet"), joblib.load(bundle_path),
+                          mimic, ed, out, cfg)
+        publish(out, cfg)
+        print(f"\ndone in {time.time() - t0:.0f}s; files: {out}/sepsis3_*.csv")
         return
 
     if a.open_test:

@@ -1,0 +1,44 @@
+section,item,cases,of,pct
+component scores >= 1: all Sepsis-3 cases,resp,3360,33639,10.0
+component scores >= 1: all Sepsis-3 cases,coag,16882,33639,50.2
+component scores >= 1: all Sepsis-3 cases,liver,9881,33639,29.4
+component scores >= 1: all Sepsis-3 cases,cardio,17208,33639,51.2
+component scores >= 1: all Sepsis-3 cases,cns,7217,33639,21.5
+component scores >= 1: all Sepsis-3 cases,renal,21590,33639,64.2
+component scores >= 1: Sepsis-3 only (no ICD code),resp,2026,26651,7.6
+component scores >= 1: Sepsis-3 only (no ICD code),coag,13603,26651,51.0
+component scores >= 1: Sepsis-3 only (no ICD code),liver,7697,26651,28.9
+component scores >= 1: Sepsis-3 only (no ICD code),cardio,11960,26651,44.9
+component scores >= 1: Sepsis-3 only (no ICD code),cns,4469,26651,16.8
+component scores >= 1: Sepsis-3 only (no ICD code),renal,16812,26651,63.1
+component scores >= 1: both,resp,1334,6988,19.1
+component scores >= 1: both,coag,3279,6988,46.9
+component scores >= 1: both,liver,2184,6988,31.3
+component scores >= 1: both,cardio,5248,6988,75.1
+component scores >= 1: both,cns,2748,6988,39.3
+component scores >= 1: both,renal,4778,6988,68.4
+SOFA exactly 2,all Sepsis-3 cases,11701,33639,34.8
+SOFA exactly 2,"lab components only (coag, liver, renal)",7017,11701,60.0
+SOFA exactly 2: combinations,cardio 1 + renal 1,2480,11701,21.2
+SOFA exactly 2: combinations,renal 2,2414,11701,20.6
+SOFA exactly 2: combinations,coag 1 + renal 1,1863,11701,15.9
+SOFA exactly 2: combinations,coag 2,1196,11701,10.2
+SOFA exactly 2: combinations,coag 1 + cardio 1,1062,11701,9.1
+SOFA exactly 2: combinations,liver 2,833,11701,7.1
+SOFA exactly 2: combinations,cardio 1 + cns 1,606,11701,5.2
+SOFA exactly 2: combinations,coag 1 + liver 1,359,11701,3.1
+SOFA exactly 2: combinations,liver 1 + renal 1,352,11701,3.0
+SOFA exactly 2: combinations,liver 1 + cardio 1,264,11701,2.3
+cardio,MAP < 70 only (1 point),13848,33639,41.2
+cardio,vasopressors (2-4 points),3360,33639,10.0
+coag points already present 7-365 days before,earlier result available,12513,16882,74.1
+coag points already present 7-365 days before,earlier result scored as high,5263,12513,42.1
+liver points already present 7-365 days before,earlier result available,6236,9881,63.1
+liver points already present 7-365 days before,earlier result scored as high,2715,6236,43.5
+renal points already present 7-365 days before,earlier result available,16237,21590,75.2
+renal points already present 7-365 days before,earlier result scored as high,8027,16237,49.4
+still SOFA >= 2 without chronic lab points,all Sepsis-3 cases,25430,33639,75.6
+still SOFA >= 2 without chronic lab points,Sepsis-3 only (no ICD code),19200,26651,72.0
+still SOFA >= 2 without chronic lab points,both,6230,6988,89.2
+still SOFA >= 2 without chronic lab points,critical outcome: still positive,9658,25430,38.0
+still SOFA >= 2 without chronic lab points,critical outcome: no longer positive,780,8209,9.5

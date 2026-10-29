@@ -284,7 +284,8 @@ def evaluate_test(table, bundle, out, cfg, log=print):
 
 PUBLIC = ["findings.md", "cohort_flow.json", "table1_characteristics.csv", "table2_summary.csv",
           "table2_comparisons.csv", "table2_performance.csv", "table3_traffic_light.csv", "table4_fairness.csv",
-          "table_feature_sets.csv", "table_shap_top.csv", "table_importance_crosscheck.csv"]
+          "table_feature_sets.csv", "table_shap_top.csv", "table_importance_crosscheck.csv",
+          "sepsis3_agreement.csv", "sepsis3_onset.csv", "sepsis3_sofa.csv", "sepsis3_test.csv"]
 PUBLIC_FIGS = ["fig_cohort_flow", "fig_rules_matched", "fig_roc_pr", "fig_calibration", "fig_decision_curve",
                "fig_traffic_light", "fig_shap_top", "fig_fairness"]
 

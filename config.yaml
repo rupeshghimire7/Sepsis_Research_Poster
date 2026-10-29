@@ -41,7 +41,7 @@ outcomes:
   critical:
     icu_within_hours: 12
 
-  # sepsis3: Not used yet: a check with a clinical sepsis definition 
+  # Clinical sepsis definition, used only as a check: python run.py --sepsis3-check
   sepsis3:
     enabled: false
     horizon_hours: 48

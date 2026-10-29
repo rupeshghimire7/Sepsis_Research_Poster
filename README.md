@@ -27,6 +27,9 @@ past visits. No blood tests. The models were then tested once on patients they h
   temperature, a fever complaint and a previous sepsis admission.
 - **Fairness:** ranking was similar across sex, race and time period. It was weaker for patients aged
   65 and over (AUROC 0.89–0.90). Septic young adults were less often flagged high-risk.
+- **Sepsis-3 check:** against a clinical sepsis definition (8.3% of test visits), the same locked model
+  still beat every rule (AUROC 0.85 vs 0.59–0.68). Codes and Sepsis-3 agreed only fairly (κ = 0.29).
+  See `results/sepsis3_*.csv`.
 
 All tables and figures are in [`results/`](results). The full findings are in
 [`results/findings.md`](results/findings.md).
@@ -100,6 +103,15 @@ python run.py --open-test   # step 2, once: test-set results, written to out/ an
 python app/traffic_light.py # prototype using the trained model
 ```
 
+**Optional Sepsis-3 check.** Scores the models against a clinical sepsis definition (Sepsis-3)
+instead of diagnosis codes. It needs seven more tables: `hosp/prescriptions`,
+`hosp/microbiologyevents`, `hosp/labevents`, `icu/chartevents`, `icu/inputevents`, `ed/pyxis` and
+`ed/vitalsign`.
+
+```bash
+python run.py --sepsis3-check   # after --open-test; writes sepsis3_agreement/onset/sofa/test.csv
+```
+
 ## Repository
 
 ```
@@ -120,13 +132,12 @@ results/            aggregate results from the real data (no patient-level data)
 ## Limitations
 
 - One US hospital, analysed retrospectively.
-- Sepsis was defined by diagnosis codes. These under-count sepsis and give no onset time.
+- Sepsis was defined by diagnosis codes, which under-count sepsis. The Sepsis-3 check assumes a baseline
+  SOFA of 0, so about a quarter of its cases rest on lab abnormalities present before the visit.
 - The complaint keyword groups have not yet been reviewed by a clinician.
 
 ## Future work
 
-- A clinical sepsis definition (Sepsis-3). The code for it is in `sepsis_ed/sepsis3.py` and runs with
-  `--sepsis3`, but it was not used for these results.
 - Validation on NSW emergency department data, with ethics approval and an equity audit that includes
   Aboriginal and Torres Strait Islander patients.
 

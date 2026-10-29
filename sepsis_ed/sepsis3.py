@@ -1,9 +1,10 @@
-"""Sepsis-3 label (Singer et al., JAMA 2016). Not used in the main analysis yet; kept for a later
-sensitivity check. Run with `python run.py --sepsis3`. It needs the large chartevents and labevents tables.
+"""Sepsis-3 label (Singer et al., JAMA 2016). Used for a sensitivity check. 
+Run with `python run.py --sepsis3`.
 
 Suspected infection: a culture up to 72 h before an antibiotic, or up to 24 h after it.
 Organ dysfunction: worst value of each SOFA component from 48 h before to 24 h after that time, summed,
-baseline assumed 0. A stay is positive when SOFA >= 2 starts within `horizon_h` hours of ED arrival.
+baseline assumed 0. A stay is positive when a suspected infection with SOFA >= 2 has its suspected-infection
+time within `horizon_h` hours after ED arrival; that time is the onset.
 
 Simplifications: window-worst SOFA rather than hourly; no urine output; respiratory points not gated on
 ventilation; vasopressors scored on norepinephrine-equivalent dose. Antibiotic GSN codes, ICU culture
@@ -30,6 +31,7 @@ omnicef oxacillin penicillin pfizerpen piperacillin rifampin rocephin septra sol
 streptomycin sulfamethoxazole sulfatrim tazicef tetracycline timentin tobramycin trimethoprim unasyn
 vancocin vancomycin vantin vibativ vibramycin zinacef zithromax zosyn zyvox""".split()
 ABX_RE = "|".join(re.escape(a) for a in ABX)
+
 # First DataBank GSN codes for systemic antibiotics, from MIMIC-Sepsis (Huang et al. 2025,
 # github.com/yongh7/MIMIC-sepsis, MIT), originally AI_Clinician (Komorowski et al. 2018).
 ABX_GSN = set("""002542 002543 007371 008873 008877 008879 008880 008935 008941 008942 008943 008944
@@ -41,6 +43,7 @@ ABX_GSN = set("""002542 002543 007371 008873 008877 008879 008880 008935 008941 
 021735 021871 023372 023989 024095 024194 024668 025080 026721 027252 027465 027470 029325 029927 029928
 037042 039551 039806 040819 041798 043350 043879 044143 045131 045132 046771 047797 048077 048262 048266
 048292 049835 050442 050443 051932 052050 060365 066295 067471""".split())
+
 # ICU culture orders charted in chartevents (blood, urine, CSF, sputum, line tips, BAL, ...), same source
 CHART_CULTURE = [225401, 225437, 225444, 225451, 225454, 225814, 225816, 225817, 225818, 225722, 225723,
                  225724, 225725, 225726, 225727, 225728, 225729, 225730, 225731, 225732, 225733, 227726,
@@ -55,6 +58,10 @@ CHART_FIO2 = 223835
 CHART_GCS = {220739: "eye", 223900: "verbal", 223901: "motor"}
 VASO = {221906: "norepinephrine", 221289: "epinephrine", 221662: "dopamine",
         221653: "dobutamine", 222315: "vasopressin", 221749: "phenylephrine"}
+
+COMPONENTS = ["resp", "coag", "liver", "cardio", "cns", "renal"]
+LAB_COMPONENTS = ["coag", "liver", "renal"]  # often abnormal before the illness (baseline is assumed 0)
+PRIOR = [f"{c}_prior" for c in LAB_COMPONENTS]
 
 
 # ---------------------------------------------------------------- infection
@@ -105,6 +112,13 @@ def suspected_infection(abx, cx):
     before = m[(d <= 0) & (d >= -72)].assign(si_time=lambda x: x.culture_time)
     after = m[(d > 0) & (d <= 24)].assign(si_time=lambda x: x.abx_time)
     return pd.concat([before, after])[["subject_id", "si_time"]].drop_duplicates()
+
+
+def near_arrival(si, stays, horizon_h):
+    """Suspected-infection times within `horizon_h` hours after an ED arrival of the same patient. Only these
+    can label a stay, so SOFA is scored for these alone (keeps the patient-level merges small)."""
+    m = si.merge(stays[["subject_id", "intime"]], on="subject_id")
+    return m.loc[hours(m.si_time - m.intime).between(0, horizon_h), ["subject_id", "si_time"]].drop_duplicates()
 
 
 # ---------------------------------------------------------------- SOFA
@@ -197,25 +211,41 @@ def sepsis3_events(si, obs):
     m = si.merge(obs, on="subject_id")
     d = hours(m.time - m.si_time)
     w = m[(d >= -48) & (d <= 24)]
-    sofa = (w.groupby(["subject_id", "si_time", "component"]).score.max()
-             .groupby(["subject_id", "si_time"]).sum().rename("sofa").reset_index())
-    return sofa[sofa.sofa >= 2]
+    comp = (w.groupby(["subject_id", "si_time", "component"]).score.max().unstack(fill_value=0)
+             .reindex(columns=COMPONENTS, fill_value=0))
+    comp["sofa"] = comp.sum(axis=1)
+    return comp[comp.sofa >= 2].reset_index().rename_axis(columns=None)
+
+
+def prior_lab_scores(stays, obs):
+    """Most recent coag/liver/renal score 7-365 days before ED arrival, a proxy for the pre-illness baseline.
+    `stays` needs stay_id, subject_id, intime. Missing when there was no result in that window."""
+    m = stays[["stay_id", "subject_id", "intime"]].merge(obs[obs.component.isin(LAB_COMPONENTS)], on="subject_id")
+    m = m[(m.time >= m.intime - pd.Timedelta(days=365)) & (m.time <= m.intime - pd.Timedelta(days=7))]
+    last = m.sort_values("time").groupby(["stay_id", "component"]).score.last().unstack()
+    return last.reindex(columns=LAB_COMPONENTS).add_suffix("_prior").rename_axis(columns=None)
 
 
 def sepsis3_label(mimic, ed, stays, horizon_h=48):
-    """Sensitivity outcome: Sepsis-3 onset within `horizon_h` hours of ED arrival.
+    """Sensitivity outcome: Sepsis-3 onset (suspected-infection time) within `horizon_h` hours of ED arrival.
     Reads chartevents/labevents/inputevents; the slow step on the full release."""
     ce = load_chartevents(mimic)
-    si = suspected_infection(antibiotics(mimic, ed), cultures(mimic, ce))
-    ev = sepsis3_events(si, sofa_observations(mimic, ed, ce))
+    ids = stays.subject_id.unique()
+    abx, cx = antibiotics(mimic, ed), cultures(mimic, ce)
+    si = suspected_infection(abx[abx.subject_id.isin(ids)], cx[cx.subject_id.isin(ids)])
+    si = near_arrival(si, stays, horizon_h)
+    obs = sofa_observations(mimic, ed, ce)
+    obs = obs[obs.subject_id.isin(si.subject_id)]
+    ev = sepsis3_events(si, obs)
 
     m = stays[["stay_id", "subject_id", "intime"]].merge(ev, on="subject_id")
     m = m[hours(m.si_time - m.intime).between(0, horizon_h)]
-    first = m.sort_values("si_time").groupby("stay_id").first()[["si_time", "sofa"]]
+    first = m.sort_values("si_time").groupby("stay_id").first()
+    first = first.join(prior_lab_scores(first.reset_index(), obs))[["si_time", "sofa"] + COMPONENTS + PRIOR]
     out = stays[["stay_id", "intime"]].join(first, on="stay_id")
     out["sepsis3"] = out.si_time.notna().astype(int)
     out["onset_hours_from_arrival"] = hours(out.si_time - out.intime)
-    return out[["sepsis3", "si_time", "sofa", "onset_hours_from_arrival"]]
+    return out[["sepsis3", "si_time", "sofa", "onset_hours_from_arrival"] + COMPONENTS + PRIOR]
 
 
 def build_labels(mimic, ed, horizon_h=48):

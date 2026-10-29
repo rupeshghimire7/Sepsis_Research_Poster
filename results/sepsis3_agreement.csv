@@ -1,0 +1,10 @@
+measure,value
+stays: both,6988
+stays: ICD code only,3104
+stays: Sepsis-3 only,26651
+stays: neither,372473
+ICD sepsis prevalence %,2.47
+Sepsis-3 prevalence %,8.22
+ICD cases meeting Sepsis-3 %,69.2
+Sepsis-3 cases with an ICD sepsis code %,20.8
+Cohen's kappa,0.293

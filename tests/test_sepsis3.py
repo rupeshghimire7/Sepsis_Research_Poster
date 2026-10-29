@@ -146,3 +146,80 @@ def test_build_labels_end_to_end(tmp_path):
     lab72 = L.build_labels(mimic, ed, horizon_h=72).set_index("stay_id")
     assert lab72.loc[1003, "sepsis3"] == 1
     assert lab72.loc[1003, "onset_hours_from_arrival"] == pytest.approx(60.0)
+
+
+def test_pruning_does_not_change_label(tmp_path, monkeypatch):
+    mimic, ed = tmp_path / "mimic", tmp_path / "ed"
+    # 1: two stays; SI 1h after the first (septic, with a lab from before arrival), SI 1h before the second
+    # (counts for neither). 2: SI exactly 48h after arrival; 3: SI at 49h; 9: not in the cohort
+    stays = pd.DataFrame({"stay_id": [1001, 1002, 2001, 3001], "subject_id": [1, 1, 2, 3],
+                          "intime": [h(0), h(100), h(0), h(0)]})
+    write(mimic, "hosp", "microbiologyevents", [
+        (1, h(0).normalize(), h(1)), (1, h(0).normalize(), h(99)), (2, h(0).normalize(), h(48)),
+        (3, h(0).normalize(), h(49)), (9, h(0).normalize(), h(1)),
+    ], ["subject_id", "chartdate", "charttime"])
+    write(mimic, "hosp", "prescriptions", [
+        (1, h(2), "CefTRIAXone", "IV", ""), (1, h(99.5), "Zosyn", "IV", ""), (2, h(50), "Zosyn", "IV", ""),
+        (3, h(50), "Zosyn", "IV", ""), (9, h(2), "Zosyn", "IV", ""),
+    ], ["subject_id", "starttime", "drug", "route", "gsn"])
+    write(mimic, "hosp", "labevents", [
+        (1, 51265, h(2), 80), (1, 50912, h(-10), 2.5), (1, 51265, h(100), 30), (2, 51265, h(47), 80),
+        (1, 50912, h(-24 * 30), 2.2), (1, 50912, h(-24 * 3), 0.9),  # renal 2 a month before; 3 days is too recent
+        (3, 51265, h(50), 40), (9, 51265, h(2), 30),
+    ], ["subject_id", "itemid", "charttime", "valuenum"])
+
+    pruned = L.sepsis3_label(mimic, ed, stays, horizon_h=48)
+    monkeypatch.setattr(L, "near_arrival", lambda si, stays, horizon_h: si)
+    unpruned = L.sepsis3_label(mimic, ed, stays, horizon_h=48)
+
+    pd.testing.assert_frame_equal(pruned, unpruned)
+    lab = pruned.set_index(stays.stay_id)
+    assert lab.sepsis3.to_dict() == {1001: 1, 1002: 0, 2001: 1, 3001: 0}
+    assert lab.loc[1001, "sofa"] == 4  # coag 2 + renal 2 (creatinine drawn before ED arrival)
+    assert lab.loc[2001, "sofa"] == 2
+    assert lab.loc[1001, ["coag", "renal", "resp", "liver", "cardio", "cns"]].tolist() == [2, 2, 0, 0, 0, 0]
+    assert lab.loc[1001, "renal_prior"] == 2 and pd.isna(lab.loc[1001, "liver_prior"])
+    assert pd.isna(lab.loc[2001, "renal_prior"]) and pd.isna(lab.loc[1002, "renal"])
+
+
+# ---------------------------------------------------------------- Sepsis-3 check
+def test_agreement_counts_shares_and_kappa():
+    from sepsis_ed.sepsis3_check import agreement
+    icd = [1] * 20 + [0] * 80
+    s3 = [1] * 15 + [0] * 5 + [1] * 15 + [0] * 65
+    a = agreement(icd, s3, min_cell=10).set_index("measure").value
+    assert (a["stays: both"], a["stays: ICD code only"], a["stays: Sepsis-3 only"], a["stays: neither"]) == \
+        (15, "<10", 15, 65)
+    assert a["ICD cases meeting Sepsis-3 %"] == 75.0
+    assert a["Sepsis-3 cases with an ICD sepsis code %"] == 50.0
+    # po = 0.80, pe = 0.2*0.3 + 0.8*0.7 = 0.62 -> kappa = 0.18/0.38
+    assert a["Cohen's kappa"] == round(0.18 / 0.38, 3)
+
+
+def test_sofa_breakdown():
+    from sepsis_ed.sepsis3_check import sofa_breakdown
+    zero = dict(resp=0, coag=0, liver=0, cardio=0, cns=0, renal=0, coag_prior=np.nan, liver_prior=np.nan,
+                renal_prior=np.nan)
+    rows = ([dict(zero, sepsis3=1, sofa=2, renal=2, renal_prior=2)] * 10      # chronic renal -> drops out
+            + [dict(zero, sepsis3=1, sofa=2, renal=1, cardio=1, renal_prior=0)] * 10  # acute -> stays
+            + [dict(zero, sepsis3=1, sofa=4, coag=2, cns=2)] * 10              # no earlier result -> stays
+            + [dict(zero, sepsis3=0, sofa=np.nan)] * 5)
+    lab = pd.DataFrame(rows)
+    icd = [1] * 10 + [0] * 20 + [0] * 5
+    critical = [0] * 10 + [1] * 20 + [0] * 5
+    b = sofa_breakdown(lab, icd, critical, min_cell=10).set_index(["section", "item"])
+    assert b.loc[("component scores >= 1: all Sepsis-3 cases", "renal"), "pct"] == round(100 * 20 / 30, 1)
+    assert b.loc[("SOFA exactly 2", "all Sepsis-3 cases"), "cases"] == 20
+    assert b.loc[("SOFA exactly 2", "lab components only (coag, liver, renal)"), "pct"] == 50.0
+    assert b.loc[("renal points already present 7-365 days before", "earlier result scored as high"), "pct"] == 50.0
+    still = b.loc["still SOFA >= 2 without chronic lab points"]
+    assert still.loc["all Sepsis-3 cases", "cases"] == 20 and still.loc["both", "pct"] == 0.0
+    assert still.loc["critical outcome: still positive", "pct"] == 100.0
+    assert still.loc["critical outcome: no longer positive", "pct"] == 0.0
+
+
+def test_onset_is_cumulative():
+    from sepsis_ed.sepsis3_check import onset
+    o = onset([1] * 10 + [5] * 10 + [30] * 10 + [np.nan], min_cell=10).set_index("within_hours")
+    assert o.loc[3, "cases"] == 10 and o.loc[6, "cases"] == 20 and o.loc[48, "cases"] == 30
+    assert o.loc[24, "share_of_sepsis3_cases_pct"] == round(100 * 20 / 30, 1)
