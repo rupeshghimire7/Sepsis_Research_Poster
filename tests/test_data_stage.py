@@ -145,3 +145,37 @@ def test_forbidden_columns():
     for bad in (["age", "disposition"], ["sepsis_icd"], ["race"], ["lab_creatinine"]):
         with pytest.raises(CheckFailed):
             check_no_forbidden(bad, CFG, ["sepsis_icd"])
+
+
+# ---------------------------------------------------------------- temporal split
+def _temporal_df():
+    # anchor_year 2150 in window 2011-2013 -> real year 2012 + (visit year - 2150)
+    rows = []
+    for pid in range(1, 61):
+        years = {0: [2150, 2151], 1: [2154, 2155], 2: [2150, 2156]}[pid % 3]  # early / new late / returning
+        rows += [{"subject_id": pid, "intime": pd.Timestamp(f"{y}-06-01"), "anchor_year_group": "2011 - 2013",
+                  "sepsis_icd": int(pid % 5 == 0)} for y in years]
+    return pd.DataFrame(rows), pd.Series(2150, index=range(1, 61))
+
+
+def test_estimated_year():
+    from sepsis_ed.split import estimated_year
+    df, anchor = _temporal_df()
+    assert estimated_year(df[df.subject_id == 3], anchor).tolist() == [2012, 2013]
+
+
+@pytest.mark.parametrize("returning", ["exclude", "include"])
+def test_temporal_split(returning):
+    from sepsis_ed.split import estimated_year, temporal_split
+    df, anchor = _temporal_df()
+    cfg = {**CFG, "temporal": {"cutoff_year": 2016, "returning_patients": returning, "valid": 0.2}}
+    s = temporal_split(df, anchor, "sepsis_icd", cfg)
+    year = estimated_year(df, anchor)
+    assert (year[s.isin(["train", "valid"])] < 2016).all() and (year[s == "test"] >= 2016).all()
+    dev = df[s.isin(["train", "valid"])].assign(split=s)
+    check_patients_disjoint(dev)
+    returning_late = (df.subject_id % 3 == 2) & (year >= 2016)
+    assert (s[returning_late] == ("excluded" if returning == "exclude" else "test")).all()
+    assert (s[df.subject_id % 3 == 1] == "test").all()
+    if returning == "exclude":
+        check_patients_disjoint(df[s != "excluded"].assign(split=s))

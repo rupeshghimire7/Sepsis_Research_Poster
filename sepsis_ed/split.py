@@ -26,6 +26,35 @@ def split_patients(df, outcome, cfg):
     return df.subject_id.map(assign).rename("split")
 
 
+def estimated_year(df, anchor_year):
+    """Real calendar year of each visit, accurate to about +/- 1 year.
+
+    MIMIC shifts each patient's dates by a fixed amount. anchor_year_group is the real 3-year window containing
+    the patient's (shifted) anchor_year, so real year ~ window middle + years since anchor_year."""
+    start = df.anchor_year_group.str[:4].astype(int)
+    return start + 1 + df.intime.dt.year - df.subject_id.map(anchor_year)
+
+
+def temporal_split(df, anchor_year, outcome, cfg):
+    """train/valid: visits before the cut-off year (split by patient). test: visits in or after it.
+    Later visits of patients already seen before the cut-off are 'excluded' unless returning_patients: include."""
+    t, seed = cfg["temporal"], cfg["seed"]
+    if t["returning_patients"] not in ("exclude", "include"):
+        raise ValueError("temporal.returning_patients must be 'exclude' or 'include'")
+    late = (estimated_year(df, anchor_year) >= t["cutoff_year"]).to_numpy()
+    new_patient = pd.Series(late).groupby(df.subject_id.to_numpy()).transform("all").to_numpy()
+
+    pat = df[~late].groupby("subject_id")[outcome].max()
+    strat = pat if pat.value_counts().min() >= 3 else None
+    train, valid = train_test_split(pat, test_size=t["valid"], stratify=strat, random_state=seed)
+    dev = pd.concat([pd.Series("train", train.index), pd.Series("valid", valid.index)])
+
+    split = pd.Series("excluded", index=df.index, name="split")
+    split[~late] = df.subject_id[~late].map(dev)
+    split[late & (new_patient | (t["returning_patients"] == "include"))] = "test"
+    return split
+
+
 def check_patients_disjoint(df):
     n = df.groupby("subject_id").split.nunique()
     if (n > 1).any():

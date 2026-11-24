@@ -320,7 +320,8 @@ def _cohort_figure(table, out, cfg):
     excluded = [f"{s['removed']:,} {reasons.get(s['step'], s['step'])}" for s in flow["flow"][1:] if s["removed"]]
     cases = int(table[primary].sum())
     splits = []
-    for name, label in (("train", "Training 70%"), ("valid", "Validation 15%"), ("test", "Test 15%")):
+    labels = cfg.get("split_labels", {"train": "Training 70%", "valid": "Validation 15%", "test": "Test 15%"})
+    for name, label in labels.items():
         d = table[table.split == name]
         splits.append(f"{label}\n{d.subject_id.nunique():,} patients\n{len(d):,} visits\n"
                       f"{int(d[primary].sum()):,} sepsis")
@@ -363,10 +364,12 @@ def findings(out, perf, res, tl, top, fair, agree, y, cfg, rules):
     f = fair[fair.sensitivity_high.notna()] if "sensitivity_high" in fair else fair.iloc[0:0]
     last = flow["flow"][-1]
     lines = [
-        "# Findings (test set, 95% CI from patient bootstrap)",
+        f"# Findings ({cfg.get('test_label', 'test set')}, 95% CI from patient bootstrap)",
         "",
-        f"- **Who was studied?** Of {last['stays']:,} adult ED visits, {flow['outcomes'][primary]:,} "
-        f"({flow['outcomes'][primary] / last['stays']:.1%}) had sepsis recorded.",
+        (f"- **Who was studied?** Of {len(y):,} adult ED visits in the temporal test set, {int(y.sum()):,} "
+         f"({y.mean():.1%}) had sepsis recorded." if "test_label" in cfg else
+         f"- **Who was studied?** Of {last['stays']:,} adult ED visits, {flow['outcomes'][primary]:,} "
+         f"({flow['outcomes'][primary] / last['stays']:.1%}) had sepsis recorded."),
         f"- **RQ1.** Using triage data alone, XGBoost reached AUROC {_fmt(a.estimate, a.lo, a.hi)} and AUPRC "
         f"{_fmt(ap.estimate, ap.lo, ap.hi)}, against a sepsis rate of {y.mean():.1%}.",
         f"- **RQ2 (models).** XGBoost {'exceeded' if lr.estimate >= 0 else 'trailed'} logistic regression by "

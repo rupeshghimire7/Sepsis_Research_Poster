@@ -93,6 +93,16 @@ split:
   valid: 0.15
   test: 0.15
 
+# Temporal validation: python run.py --temporal (then --temporal --open-test). Retrains on earlier visits and
+# tests on later ones, in out/temporal/ with its own test lock; the main analysis is not touched.
+# MIMIC shifts each patient's dates; the real year of a visit is estimated from anchor_year_group (a 3-year
+# window) as its middle year, so it is accurate to about +/- 1 year.
+temporal:
+  cutoff_year: 2017               # visits estimated in or after this year form the test period
+  returning_patients: exclude     # exclude: test only patients first seen after the cut-off (no patient overlap)
+                                  # include: also test later visits of patients seen before (as in deployment)
+  valid: 0.15                     # share of earlier-period patients held out for calibration and cut-offs
+
 checks:
   # Columns that must never reach a feature matrix. Outcome columns are added automatically.
   forbidden_columns: [subject_id, stay_id, hadm_id, intime, outtime, disposition, ed_los_hours,

@@ -13,6 +13,10 @@ python run.py --sepsis3-check
     Optional, after step 2: score the locked models against a clinical Sepsis-3 label (nothing is retrained).
     Needs the extra tables listed in sepsis_ed/sepsis3.py.
 
+python run.py --temporal   then, once:   python run.py --temporal --open-test
+    Temporal validation: reuse the main analysis table, train on visits before temporal.cutoff_year and test on
+    later visits. Everything (models, lock, outputs) lives in out/temporal/; results go to results/temporal/.
+
 Other flags: --data-only stops after the data stage; --sepsis3 adds the Sepsis-3 label to the analysis table;
 --reopen-test overrides the test lock (report it if you use it).
 """
@@ -32,8 +36,9 @@ from sepsis_ed.cohort import build_cohort
 from sepsis_ed.features import build_features, missingness_table
 from sepsis_ed.labels import critical_label, sepsis_icd_label
 from sepsis_ed.model import develop, validation_report
+from sepsis_ed.io import read
 from sepsis_ed.split import (CheckFailed, check_no_forbidden, check_patients_disjoint, check_prevalence,
-                             enough_cases, prevalence_by_split, split_patients)
+                             enough_cases, prevalence_by_split, split_patients, temporal_split)
 
 KEEP = ["stay_id", "subject_id", "hadm_id", "intime", "race", "anchor_year_group", "admitted"]  # audit only
 
@@ -85,6 +90,49 @@ def data_stage(cfg, mimic, ed, out, sepsis3):
     return table, sets, ok, cases_msg
 
 
+def temporal_stage(cfg, mimic, main_out, out):
+    """Re-split the main analysis table by time. No prevalence-balance check: drift over time is part of what
+    temporal validation measures, so it is reported (prevalence_by_split.csv) instead of blocked."""
+    src = main_out / "analysis_table.parquet"
+    if not src.exists():
+        sys.exit(f"No {src}: run the main data stage first (python run.py --data-only).")
+    primary, secondary = cfg["outcomes"]["primary"], cfg["outcomes"]["secondary"]
+    table = pd.read_parquet(src).drop(columns="split")
+    anchor = read(mimic, "hosp", "patients", ["subject_id", "anchor_year"]).set_index("subject_id").anchor_year
+    table["split"] = temporal_split(table, anchor, primary, cfg)
+    n_excl = table.split.eq("excluded").sum()
+    table = table[table.split != "excluded"].reset_index(drop=True)
+
+    dev = table[table.split.isin(["train", "valid"])]
+    check_patients_disjoint(dev if cfg["temporal"]["returning_patients"] == "include" else table)
+    sets = json.loads((main_out / "feature_sets.json").read_text())
+    outcomes = [o for o in (primary, secondary, "sepsis3") if o in table]
+    prev = prevalence_by_split(table, outcomes)
+    ok, cases_msg = enough_cases(prev, primary, cfg)
+
+    table.to_parquet(out / "analysis_table.parquet", index=False)
+    table[["stay_id", "subject_id", "split"]].to_csv(out / "splits.csv", index=False)
+    prev.to_csv(out / "prevalence_by_split.csv", index=False)
+    (out / "feature_sets.json").write_text(json.dumps(sets, indent=2))
+    flow = json.loads((main_out / "cohort_flow.json").read_text())
+    flow["temporal"] = {**cfg["temporal"], "excluded_returning_visits": int(n_excl)}
+    flow["splits"] = table.groupby("split").subject_id.nunique().to_dict()
+    (out / "cohort_flow.json").write_text(json.dumps(flow, indent=2))
+
+    print(f"cut-off {cfg['temporal']['cutoff_year']}, returning patients: {cfg['temporal']['returning_patients']}"
+          f" ({n_excl:,} later visits of earlier patients excluded)")
+    print(prev.assign(prevalence=prev.prevalence.map("{:.2%}".format)).to_string(index=False))
+    return table, sets, ok, cases_msg
+
+
+def temporal_labels(cfg):
+    c = cfg["temporal"]["cutoff_year"]
+    test = "patients first seen" if cfg["temporal"]["returning_patients"] == "exclude" else "visits"
+    cfg["split_labels"] = {"train": f"Training (before {c})", "valid": f"Validation (before {c})",
+                           "test": f"Test ({test} {c} or later)"}
+    cfg["test_label"] = f"temporal test set: {test} {c} or later, models trained on earlier visits"
+
+
 def sha256(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
@@ -102,13 +150,23 @@ def main():
                     help="locked models vs triage rules with Sepsis-3 as the outcome (after --open-test)")
     ap.add_argument("--open-test", action="store_true", help="evaluate the saved models on the test split")
     ap.add_argument("--reopen-test", action="store_true", help="override the test lock (report that you did)")
+    ap.add_argument("--temporal", action="store_true",
+                    help="temporal validation in out/temporal/ (train on earlier visits, test on later ones)")
     a = ap.parse_args()
     cfg = config.load(a.config)
     mimic = a.mimic_dir or cfg["paths"]["mimic_dir"]
     ed = a.ed_dir or cfg["paths"]["ed_dir"]
-    out = Path(a.out or cfg["paths"]["out_dir"])
+    main_out = Path(cfg["paths"]["out_dir"])
+    out = Path(a.out or main_out)
     if a.out:  # only the main run fills the repository's results/ folder
         cfg["paths"]["results_dir"] = str((out / "results").resolve())
+    if a.temporal:
+        if a.audit or a.sepsis3_check or a.sepsis3:
+            sys.exit("--temporal works with step 1 and --open-test only.")
+        main_out, out = out, out / "temporal"
+        if not a.out:
+            cfg["paths"]["results_dir"] = str(Path(cfg["paths"]["results_dir"]) / "temporal")
+        temporal_labels(cfg)
     out.mkdir(parents=True, exist_ok=True)
     bundle_path, lock_path = out / "models" / "bundle.joblib", out / "test_lock.json"
     lock = json.loads(lock_path.read_text()) if lock_path.exists() else None
@@ -164,7 +222,10 @@ def main():
         sys.exit(f"CHECK FAILED: the test set was opened on {lock['opened_at']}. Retraining now would be tuning "
                  "after seeing test results. Use --data-only, or --reopen-test if you will report it.")
 
-    table, sets, ok, cases_msg = data_stage(cfg, mimic, ed, out, a.sepsis3)
+    if a.temporal:
+        table, sets, ok, cases_msg = temporal_stage(cfg, mimic, main_out, out)
+    else:
+        table, sets, ok, cases_msg = data_stage(cfg, mimic, ed, out, a.sepsis3)
     if a.data_only:
         return
     if not ok:
@@ -182,7 +243,8 @@ def main():
     joblib.dump(bundle, bundle_path)
     print(rep[["model", "outcome", "auroc", "auprc", "prevalence"]].round(3).to_string(index=False))
     print(f"\nmodels saved to {bundle_path} ({time.time() - t0:.0f}s). "
-          "Next, once, when every modelling choice is final: python run.py --open-test")
+          "Next, once, when every modelling choice is final: python run.py "
+          + ("--temporal " if a.temporal else "") + "--open-test")
 
 
 if __name__ == "__main__":
