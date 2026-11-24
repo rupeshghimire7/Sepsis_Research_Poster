@@ -15,6 +15,9 @@ Docs/Documents/*
 !Docs/Documents/Project Plan & Study Protocol — Explainable Sepsis Risk at ED Triage.pdf
 !Docs/Documents/Prototype.png
 
+# Research paper drafts (team only)
+research_paper/
+
 # Synthetic test data (python tests/make_synthetic.py)
 syn/
 syn_out/
